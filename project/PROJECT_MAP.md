@@ -169,9 +169,13 @@ Bang chinh:
 - `teachers`
 - `assignments`
 - `student_on_assignments`
+- `teacher_on_assignments`
 - `submissions`
 - `recommendations`
 - `forms`
+- `matrixfactorizations`
+
+Schema backend Java dang uu tien bam theo luoc do CSDL trong file DATN goc. Mot so ten API van giu dang frontend dang dung, vi backend map qua entity/service.
 
 ## Thu Tu Doc Code
 

@@ -253,3 +253,85 @@ begin
     end if;
 end $$;
 @@
+
+do $$
+begin
+    if to_regclass('public.feedback_forms') is not null and to_regclass('public.forms') is not null then
+        insert into public.forms (
+            id,
+            submission_id,
+            list_used_tcids,
+            time_ordered_tcids,
+            scores,
+            feedback,
+            created_at,
+            updated_at,
+            is_active,
+            deleted_at
+        )
+        select
+            id,
+            submission_id,
+            public.trs_json_to_int_array(list_used_tcids),
+            public.trs_json_to_int_array(time_ordered_tcids),
+            scores,
+            feedback,
+            created_at,
+            updated_at,
+            true,
+            null
+        from public.feedback_forms
+        on conflict (id) do nothing;
+
+        drop table public.feedback_forms cascade;
+    end if;
+
+    if to_regclass('public.matrix_factorizations') is not null and to_regclass('public.matrixfactorizations') is not null then
+        insert into public.matrixfactorizations (
+            id,
+            assignment_id,
+            model_name,
+            matrix_npz_path,
+            list_student_ids,
+            list_testcase_ids,
+            created_at,
+            updated_at,
+            is_active,
+            deleted_at
+        )
+        select
+            id,
+            assignment_id,
+            model_name,
+            matrix_npz_path,
+            public.trs_json_to_text_array(list_student_ids),
+            public.trs_json_to_int_array(list_testcase_ids),
+            created_at,
+            updated_at,
+            true,
+            null
+        from public.matrix_factorizations
+        on conflict (id) do nothing;
+
+        drop table public.matrix_factorizations cascade;
+    end if;
+end $$;
+@@
+
+do $$
+begin
+    if to_regclass('public.recommendations') is not null then
+        alter table public.recommendations drop column if exists recommended_testcases;
+        alter table public.recommendations drop column if exists failed_testcases;
+        alter table public.recommendations drop column if exists model_used;
+        alter table public.recommendations drop column if exists sampling_group;
+        alter table public.recommendations drop column if exists is_fallback;
+    end if;
+
+    if to_regclass('public.submissions') is not null then
+        alter table public.submissions drop column if exists compile_error;
+        alter table public.submissions drop column if exists runtime_error;
+        alter table public.submissions drop column if exists failed_outputs;
+    end if;
+end $$;
+@@
