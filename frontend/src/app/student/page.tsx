@@ -524,6 +524,11 @@ export default function StudentDashboard() {
   const hiddenHasFailed = hiddenRows.some((score) => !score.passed);
   const publicTableHasHiddenFailures = publicRowsAllPassed && hiddenHasFailed;
   const canShowRecommendationRows = recommendation?.status === "READY" || recommendation?.status === "PREVIOUS_TESTCASE_NOT_COMPLETED";
+  const canShowFeedbackForm = selectedSubmission?.status === "SUCCESS"
+    && !!recommendation
+    && ["READY", "PREVIOUS_TESTCASE_NOT_COMPLETED", "NO_TESTCASE"].includes(recommendation.status)
+    && !recommendation.is_filled_form
+    && !formSubmitted;
   const recommendationRows = canShowRecommendationRows
     ? (recommendation.details && recommendation.details.length > 0
         ? recommendation.details
@@ -926,12 +931,16 @@ export default function StudentDashboard() {
                         )}
 
                         {/* Recommendation Feedback Form */}
-                        {recommendation.status === "READY" && selectedSubmission.status === 'SUCCESS' && !recommendation.is_filled_form && !formSubmitted && (
+                        {canShowFeedbackForm && (
                           <form onSubmit={handleFeedbackSubmit} style={{ borderTop: "1px solid hsl(var(--border-color))", paddingTop: "1.5rem", marginTop: "1rem" }}>
-                            <h4 style={{ fontWeight: "700", marginBottom: "1rem" }}>Khảo sát phản hồi gợi ý</h4>
+                            <h4 style={{ fontWeight: "700", marginBottom: "1rem" }}>
+                              {recommendation.status === "NO_TESTCASE" ? "Khảo sát sau khi chấm bài" : "Khảo sát phản hồi gợi ý"}
+                            </h4>
                             
                             <div className="form-group" style={{ marginBottom: "1rem" }}>
-                              <label className="form-label">Mức độ hữu ích của gợi ý này (1-5 sao)</label>
+                              <label className="form-label">
+                                {recommendation.status === "NO_TESTCASE" ? "Mức độ hài lòng với kết quả chấm bài (1-5 sao)" : "Mức độ hữu ích của gợi ý này (1-5 sao)"}
+                              </label>
                               <select
                                 className="form-control"
                                 value={formRating}
@@ -947,10 +956,12 @@ export default function StudentDashboard() {
                             </div>
 
                             <div className="form-group" style={{ marginBottom: "1rem" }}>
-                              <label className="form-label">Ý kiến đóng góp thêm về testcase gợi ý</label>
+                              <label className="form-label">
+                                {recommendation.status === "NO_TESTCASE" ? "Ý kiến đóng góp thêm" : "Ý kiến đóng góp thêm về testcase gợi ý"}
+                              </label>
                               <textarea
                                 className="form-control"
-                                placeholder="Gợi ý này có giúp bạn tìm ra lỗi không?..."
+                                placeholder={recommendation.status === "NO_TESTCASE" ? "Bạn có góp ý gì về trải nghiệm nộp bài không?..." : "Gợi ý này có giúp bạn tìm ra lỗi không?..."}
                                 value={formFeedback}
                                 onChange={(e) => setFormFeedback(e.target.value)}
                                 rows={3}

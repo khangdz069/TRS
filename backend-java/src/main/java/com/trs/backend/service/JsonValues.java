@@ -22,4 +22,18 @@ public final class JsonValues {
         }
         return value;
     }
+
+    public static String toJsonText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String text) {
+            return text;
+        }
+        try {
+            return MAPPER.writeValueAsString(value);
+        } catch (JsonProcessingException ex) {
+            return String.valueOf(value);
+        }
+    }
 }
