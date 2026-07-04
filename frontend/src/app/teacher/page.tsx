@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 interface Assignment {
@@ -40,69 +40,75 @@ interface AnalyticsData {
   feedbacks: FeedbackEntry[];
 }
 
+type TeacherTab = "assignments" | "import" | "teachers" | "students" | "analytics";
+
 export default function TeacherDashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [activeTab, setActiveTab] = useState<"assignments" | "import" | "teachers" | "students" | "analytics">("assignments");
+
+  const [activeTab, setActiveTab] = useState<TeacherTab>("assignments");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [user, setUser] = useState<TeacherUser | null>(null);
-  
-  // Data States
+
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("");
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
   const [students, setStudents] = useState<Student[]>([]);
   const [coTeachers, setCoTeachers] = useState<string[]>([
     "lan.nt@hust.edu.vn",
-    "hung.pv@hust.edu.vn"
+    "hung.pv@hust.edu.vn",
   ]);
 
-  // Form states
   const [newTitle, setNewTitle] = useState("");
   const [newStart, setNewStart] = useState("");
   const [newEnd, setNewEnd] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [teacherEmail, setTeacherEmail] = useState("");
-  
-  // CSV Import States
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploadError, setUploadError] = useState("");
 
-  // Loading States
   const [isLoadingAsms, setIsLoadingAsms] = useState(false);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
-  
-  // Analytics States
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
   useEffect(() => {
-    // Auth Check
     const token = localStorage.getItem("trs_token");
     const storedUser = localStorage.getItem("trs_user");
     if (!token || !storedUser) {
       router.push("/login");
       return;
     }
+
     const parsedUser = JSON.parse(storedUser) as TeacherUser;
     if (parsedUser.role !== "TEACHER") {
       router.push("/student");
       return;
     }
+
     setUser(parsedUser);
     fetchAssignments(token);
   }, []);
 
+  useEffect(() => {
+    if (selectedAssignmentId && (activeTab === "students" || activeTab === "import")) {
+      fetchStudents(selectedAssignmentId);
+    }
+    if (selectedAssignmentId && activeTab === "analytics") {
+      fetchAnalytics(selectedAssignmentId);
+    }
+  }, [selectedAssignmentId, activeTab]);
+
   const fetchAssignments = async (token?: string) => {
     const activeToken = token || localStorage.getItem("trs_token");
     if (!activeToken) return;
-    
+
     setIsLoadingAsms(true);
     try {
       const response = await fetch("/api/assignments", {
-        headers: { "Authorization": `Bearer ${activeToken}` }
+        headers: { Authorization: `Bearer ${activeToken}` },
       });
       if (response.ok) {
         const data = await response.json();
@@ -125,7 +131,7 @@ export default function TeacherDashboard() {
     setIsLoadingStudents(true);
     try {
       const response = await fetch(`/api/assignments/${asmId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
         const data = await response.json();
@@ -138,15 +144,6 @@ export default function TeacherDashboard() {
     }
   };
 
-  useEffect(() => {
-    if (selectedAssignmentId && (activeTab === "students" || activeTab === "import")) {
-      fetchStudents(selectedAssignmentId);
-    }
-    if (selectedAssignmentId && activeTab === "analytics") {
-      fetchAnalytics(selectedAssignmentId);
-    }
-  }, [selectedAssignmentId, activeTab]);
-
   const fetchAnalytics = async (asmId: string) => {
     const token = localStorage.getItem("trs_token");
     if (!token || !asmId) return;
@@ -154,7 +151,7 @@ export default function TeacherDashboard() {
     setIsLoadingAnalytics(true);
     try {
       const response = await fetch(`/api/forms/analytics?assignment_id=${asmId}`, {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
         const data = await response.json();
@@ -167,7 +164,7 @@ export default function TeacherDashboard() {
     }
   };
 
-  const handleAddAssignment = async (e: React.FormEvent) => {
+  const handleAddAssignment = async (e: FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem("trs_token");
     if (!token || !newTitle || !newStart || !newEnd) return;
@@ -177,14 +174,14 @@ export default function TeacherDashboard() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: newTitle,
           description: newDesc,
           start_date: newStart,
-          end_date: newEnd
-        })
+          end_date: newEnd,
+        }),
       });
 
       if (!response.ok) {
@@ -205,14 +202,15 @@ export default function TeacherDashboard() {
     }
   };
 
-  const handleAddTeacher = (e: React.FormEvent) => {
+  const handleAddTeacher = (e: FormEvent) => {
     e.preventDefault();
-    if (!teacherEmail || coTeachers.includes(teacherEmail)) return;
-    setCoTeachers([...coTeachers, teacherEmail]);
+    const email = teacherEmail.trim();
+    if (!email || coTeachers.includes(email)) return;
+    setCoTeachers([...coTeachers, email]);
     setTeacherEmail("");
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
       setUploadMessage("");
@@ -235,20 +233,20 @@ export default function TeacherDashboard() {
     try {
       const response = await fetch("/api/students/import", {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
-        body: formData
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
       });
 
       const data = await response.json();
       if (response.ok) {
-        setUploadMessage(`✔️ ${data.message}`);
+        setUploadMessage(`Thành công: ${data.message}`);
         setSelectedFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
         fetchStudents(selectedAssignmentId);
       } else {
         setUploadError(data.error || "Tải lên thất bại.");
       }
-    } catch (err) {
+    } catch {
       setUploadError("Lỗi kết nối máy chủ khi tải lên danh sách sinh viên.");
     } finally {
       setIsUploading(false);
@@ -263,7 +261,7 @@ export default function TeacherDashboard() {
   return (
     <>
       <div className="bg-glow-mesh"></div>
-      
+
       <header className="header">
         <div className="container header-container">
           <Link href="/" className="logo">
@@ -271,7 +269,7 @@ export default function TeacherDashboard() {
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
             <span style={{ fontSize: "0.9rem", color: "hsl(var(--text-secondary))" }}>
-              Chào Giảng viên: <strong>{user?.name || "TS. Nguyễn Văn A"}</strong>
+              Chào giảng viên: <strong>{user?.name || "Teacher"}</strong>
             </span>
             <button onClick={logout} className="sys-status" style={{ background: "rgba(239, 68, 68, 0.1)", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.2)", textDecoration: "none", cursor: "pointer" }}>
               Đăng xuất
@@ -281,39 +279,37 @@ export default function TeacherDashboard() {
       </header>
 
       <div className="sidebar-layout">
-        {/* Navigation Sidebar */}
         <aside className="sidebar">
-          <div className="sidebar-title">Menu Quản Lý</div>
+          <div className="sidebar-title">Menu quản lý</div>
           <nav className="sidebar-nav">
             <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")}>
-              📝 Quản lý Bài tập lớn
+              Quản lý bài tập lớn
             </button>
             <button className={`sidebar-link ${activeTab === "import" ? "active" : ""}`} onClick={() => setActiveTab("import")}>
-              📥 Đăng ký sinh viên (CSV)
+              Đăng ký sinh viên
             </button>
             <button className={`sidebar-link ${activeTab === "teachers" ? "active" : ""}`} onClick={() => setActiveTab("teachers")}>
-              🤝 Thêm giảng viên hợp tác
+              Thêm giảng viên hợp tác
             </button>
             <button className={`sidebar-link ${activeTab === "students" ? "active" : ""}`} onClick={() => setActiveTab("students")}>
-              🧑‍🎓 Danh sách sinh viên
+              Danh sách sinh viên
             </button>
             <button className={`sidebar-link ${activeTab === "analytics" ? "active" : ""}`} onClick={() => setActiveTab("analytics")}>
-              📊 Thống kê Survey
+              Thống kê survey
             </button>
           </nav>
         </aside>
 
-        {/* Content Area */}
         <main className="content-area">
           {activeTab === "assignments" && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
                 <div>
-                  <h1 style={{ fontSize: "1.75rem", fontWeight: 800 }}>Quản lý Bài tập lớn</h1>
+                  <h1 style={{ fontSize: "1.75rem", fontWeight: 800 }}>Quản lý bài tập lớn</h1>
                   <p style={{ color: "hsl(var(--text-secondary))" }}>Tạo mới, xem và chỉnh sửa các bài tập lớn lập trình trên hệ thống.</p>
                 </div>
                 <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-                  ➕ Thêm Bài Tập Lớn
+                  Thêm bài tập lớn
                 </button>
               </div>
 
@@ -330,7 +326,7 @@ export default function TeacherDashboard() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
                       <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "hsl(var(--color-primary))" }}>{asm.name}</h3>
                       <span className="mock-badge warning" style={{ fontFamily: "var(--font-mono)" }}>
-                        Hạn nộp: {asm.end_date ? new Date(asm.end_date).toLocaleString('vi-VN') : "Không giới hạn"}
+                        Hạn nộp: {asm.end_date ? new Date(asm.end_date).toLocaleString("vi-VN") : "Không giới hạn"}
                       </span>
                     </div>
                     <p style={{ color: "hsl(var(--text-secondary))", fontSize: "0.95rem", marginBottom: "1rem" }}>{asm.description}</p>
@@ -346,31 +342,31 @@ export default function TeacherDashboard() {
 
           {activeTab === "import" && (
             <div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Đăng ký sinh viên bằng CSV</h1>
+              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Đăng ký sinh viên bằng CSV/Excel</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2.5rem" }}>
-                Tải lên tệp tin CSV chứa danh sách lớp xuất từ BKEL để đăng kí các sinh viên vào một Bài tập lớn cụ thể.
+                Tải lên tệp CSV hoặc Excel chứa danh sách lớp để đăng ký sinh viên vào một bài tập lớn cụ thể.
               </p>
 
               <div className="tech-panel" style={{ marginBottom: "2rem" }}>
                 <div className="form-group" style={{ maxWidth: "400px" }}>
-                  <label className="form-label">Chọn Bài tập lớn đích</label>
+                  <label className="form-label">Chọn bài tập lớn đích</label>
                   <select
                     className="form-control"
                     value={selectedAssignmentId}
                     onChange={(e) => setSelectedAssignmentId(e.target.value)}
                     style={{ background: "rgba(0,0,0,0.2)" }}
                   >
-                    {assignments.map(a => (
-                      <option key={a.id} value={a.id} style={{ background: "#222" }}>{a.name}</option>
+                    {assignments.map((asm) => (
+                      <option key={asm.id} value={asm.id} style={{ background: "#222" }}>{asm.name}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div className="tech-panel" style={{ marginBottom: "2rem", borderLeft: "4px solid hsl(var(--color-secondary))" }}>
-                <h4 style={{ fontWeight: "700", marginBottom: "0.5rem" }}>📌 Định dạng file BKEL yêu cầu:</h4>
+                <h4 style={{ fontWeight: "700", marginBottom: "0.5rem" }}>Định dạng file yêu cầu</h4>
                 <p style={{ fontSize: "0.9rem", color: "hsl(var(--text-secondary))" }}>
-                  File CSV hoặc Excel (.xlsx) phải bao gồm các cột cách nhau bằng dấu phẩy có tiêu đề tương ứng: <code>MSSV</code>, <code>Họ tên</code>, và <code>Email</code>.
+                  File CSV hoặc Excel nên có các cột tiêu đề tương ứng: <code>MSSV</code>, <code>Họ tên</code>, và <code>Email</code>.
                 </p>
               </div>
 
@@ -380,9 +376,9 @@ export default function TeacherDashboard() {
                   padding: "2rem",
                   borderRadius: "var(--radius-md)",
                   textAlign: "center",
-                  background: "rgba(255,255,255,0.01)"
+                  background: "rgba(255,255,255,0.01)",
                 }}>
-                  <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📄</div>
+                  <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem", fontWeight: 700 }}>CSV / XLSX</div>
                   <input
                     type="file"
                     accept=".csv,.xlsx,.xls"
@@ -395,7 +391,7 @@ export default function TeacherDashboard() {
                     Chọn tệp tin
                   </label>
                   <div style={{ fontSize: "0.9rem", color: "hsl(var(--text-muted))" }}>
-                    {selectedFile ? `Tệp đã chọn: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)` : "Chọn file CSV của BKEL (.csv, .xlsx)"}
+                    {selectedFile ? `Tệp đã chọn: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)` : "Chọn file CSV hoặc Excel của BKEL (.csv, .xlsx)"}
                   </div>
                 </div>
 
@@ -417,7 +413,7 @@ export default function TeacherDashboard() {
 
               {uploadError && (
                 <div style={{ marginTop: "1.5rem", padding: "1rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-sm)", color: "rgb(239, 68, 68)" }}>
-                  ⚠️ {uploadError}
+                  Cảnh báo: {uploadError}
                 </div>
               )}
             </div>
@@ -447,16 +443,16 @@ export default function TeacherDashboard() {
               </form>
 
               <div className="tech-panel" style={{ marginTop: "0" }}>
-                <h3 className="tech-panel-title">👥 Giảng viên tham gia quản lý</h3>
+                <h3 className="tech-panel-title">Giảng viên tham gia quản lý</h3>
                 <ul style={{ listStyleType: "none", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                   <li style={{ display: "flex", justifyContent: "space-between", paddingBottom: "0.5rem", borderBottom: "1px solid hsl(var(--border-color))" }}>
-                    <span>{user?.email} (Bạn - Chủ sở hữu)</span>
+                    <span>{user?.email} (Bạn - chủ sở hữu)</span>
                     <span className="mock-badge success">Chủ sở hữu</span>
                   </li>
-                  {coTeachers.map((email, idx) => (
-                    <li key={idx} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "0.5rem", borderBottom: "1px solid hsl(var(--border-color))" }}>
+                  {coTeachers.map((email) => (
+                    <li key={email} style={{ display: "flex", justifyContent: "space-between", paddingBottom: "0.5rem", borderBottom: "1px solid hsl(var(--border-color))" }}>
                       <span>{email}</span>
-                      <span className="mock-badge primary" style={{ cursor: "pointer" }} onClick={() => setCoTeachers(coTeachers.filter(e => e !== email))}>
+                      <span className="mock-badge primary" style={{ cursor: "pointer" }} onClick={() => setCoTeachers(coTeachers.filter((item) => item !== email))}>
                         Xóa
                       </span>
                     </li>
@@ -473,22 +469,7 @@ export default function TeacherDashboard() {
                 Xem danh sách sinh viên được phân bổ và cấp quyền nộp bài tại các bài tập lớn.
               </p>
 
-              <div className="tech-panel" style={{ marginBottom: "2rem" }}>
-                <div className="form-group" style={{ maxWidth: "400px" }}>
-                  <label className="form-label">Chọn Bài tập lớn</label>
-                  <select
-                    className="form-control"
-                    value={selectedAssignmentId}
-                    onChange={(e) => setSelectedAssignmentId(e.target.value)}
-                    style={{ background: "rgba(0,0,0,0.2)" }}
-                  >
-                    <option value="" disabled>-- Chọn bài tập lớn --</option>
-                    {assignments.map(a => (
-                      <option key={a.id} value={a.id} style={{ background: "#222" }}>{a.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <AssignmentPicker assignments={assignments} selectedAssignmentId={selectedAssignmentId} setSelectedAssignmentId={setSelectedAssignmentId} />
 
               {isLoadingStudents && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải danh sách sinh viên...</p>}
               {!isLoadingStudents && students.length === 0 && selectedAssignmentId && (
@@ -502,7 +483,7 @@ export default function TeacherDashboard() {
                   <thead>
                     <tr>
                       <th>MSSV</th>
-                      <th>Họ và Tên</th>
+                      <th>Họ và tên</th>
                       <th>Email</th>
                     </tr>
                   </thead>
@@ -522,34 +503,19 @@ export default function TeacherDashboard() {
 
           {activeTab === "analytics" && (
             <div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Thống kê Survey Khảo sát</h1>
+              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Thống kê khảo sát</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
                 Thống kê các đánh giá phản hồi gợi ý testcase từ sinh viên cho bài tập lớn.
               </p>
 
-              <div className="tech-panel" style={{ marginBottom: "2rem" }}>
-                <div className="form-group" style={{ maxWidth: "400px" }}>
-                  <label className="form-label">Chọn Bài tập lớn</label>
-                  <select
-                    className="form-control"
-                    value={selectedAssignmentId}
-                    onChange={(e) => setSelectedAssignmentId(e.target.value)}
-                    style={{ background: "rgba(0,0,0,0.2)" }}
-                  >
-                    <option value="" disabled>-- Chọn bài tập lớn --</option>
-                    {assignments.map(a => (
-                      <option key={a.id} value={a.id} style={{ background: "#222" }}>{a.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <AssignmentPicker assignments={assignments} selectedAssignmentId={selectedAssignmentId} setSelectedAssignmentId={setSelectedAssignmentId} />
 
               {isLoadingAnalytics && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải dữ liệu thống kê...</p>}
               {!isLoadingAnalytics && analyticsData && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
                     <div className="tech-panel" style={{ marginTop: "0", textAlign: "center" }}>
-                      <h3 style={{ color: "hsl(var(--text-secondary))", fontSize: "1rem", marginBottom: "0.5rem" }}>Tổng số lượt Feedback</h3>
+                      <h3 style={{ color: "hsl(var(--text-secondary))", fontSize: "1rem", marginBottom: "0.5rem" }}>Tổng số lượt feedback</h3>
                       <div style={{ fontSize: "2.5rem", fontWeight: "800", color: "hsl(var(--color-primary))" }}>
                         {analyticsData.total}
                       </div>
@@ -557,17 +523,17 @@ export default function TeacherDashboard() {
                     <div className="tech-panel" style={{ marginTop: "0", textAlign: "center" }}>
                       <h3 style={{ color: "hsl(var(--text-secondary))", fontSize: "1rem", marginBottom: "0.5rem" }}>Đánh giá trung bình</h3>
                       <div style={{ fontSize: "2.5rem", fontWeight: "800", color: "hsl(var(--color-success))" }}>
-                        {analyticsData.average_rating.toFixed(1)} ⭐
+                        {analyticsData.average_rating.toFixed(1)} sao
                       </div>
                     </div>
                   </div>
 
                   {analyticsData.total > 0 && (
                     <div className="tech-panel" style={{ marginTop: "0" }}>
-                      <h3 className="tech-panel-title">📉 Các testcase được gợi ý nhiều nhất</h3>
+                      <h3 className="tech-panel-title">Các testcase được gợi ý nhiều nhất</h3>
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                         {Object.entries(analyticsData.testcase_stats)
-                          .sort(([, a], [, b]) => (b as number) - (a as number))
+                          .sort(([, a], [, b]) => b - a)
                           .slice(0, 10)
                           .map(([tcId, count]) => (
                             <div key={tcId} style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -584,17 +550,17 @@ export default function TeacherDashboard() {
 
                   {analyticsData.feedbacks && analyticsData.feedbacks.length > 0 && (
                     <div className="tech-panel" style={{ marginTop: "0" }}>
-                      <h3 className="tech-panel-title">📝 Các phản hồi ý kiến gần đây</h3>
+                      <h3 className="tech-panel-title">Các phản hồi ý kiến gần đây</h3>
                       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                        {analyticsData.feedbacks.map((fb, idx) => (
-                          <div key={idx} style={{ padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "var(--radius-sm)", borderLeft: "3px solid hsl(var(--color-primary))" }}>
+                        {analyticsData.feedbacks.map((feedback, idx) => (
+                          <div key={`${feedback.created_at || idx}`} style={{ padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "var(--radius-sm)", borderLeft: "3px solid hsl(var(--color-primary))" }}>
                             <div style={{ marginBottom: "0.5rem" }}>
-                              {Array.from({length: fb.rating}).map((_, i) => <span key={i}>⭐</span>)}
+                              <span>{feedback.rating}/5 sao</span>
                               <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))", marginLeft: "1rem" }}>
-                                {fb.created_at ? new Date(fb.created_at).toLocaleString('vi-VN') : ""}
+                                {feedback.created_at ? new Date(feedback.created_at).toLocaleString("vi-VN") : ""}
                               </span>
                             </div>
-                            <p style={{ color: "hsl(var(--text-primary))", margin: 0, fontStyle: "italic" }}>&quot;{fb.text}&quot;</p>
+                            <p style={{ color: "hsl(var(--text-primary))", margin: 0, fontStyle: "italic" }}>&quot;{feedback.text}&quot;</p>
                           </div>
                         ))}
                       </div>
@@ -607,12 +573,11 @@ export default function TeacherDashboard() {
         </main>
       </div>
 
-      {/* Add Assignment Modal Popup */}
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
-              <h3 className="modal-title">Tạo Bài Tập Lớn Mới</h3>
+              <h3 className="modal-title">Tạo bài tập lớn mới</h3>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>×</button>
             </div>
             <form onSubmit={handleAddAssignment}>
@@ -672,5 +637,36 @@ export default function TeacherDashboard() {
         </div>
       )}
     </>
+  );
+}
+
+function AssignmentPicker({
+  assignments,
+  selectedAssignmentId,
+  setSelectedAssignmentId,
+}: {
+  assignments: Assignment[];
+  selectedAssignmentId: string;
+  setSelectedAssignmentId: (id: string) => void;
+}) {
+  return (
+    <div className="tech-panel" style={{ marginBottom: "2rem" }}>
+      <div className="form-group" style={{ maxWidth: "400px" }}>
+        <label className="form-label">Chọn bài tập lớn</label>
+        <select
+          className="form-control"
+          value={selectedAssignmentId}
+          onChange={(e) => setSelectedAssignmentId(e.target.value)}
+          style={{ background: "rgba(0,0,0,0.2)" }}
+        >
+          <option value="" disabled>-- Chọn bài tập lớn --</option>
+          {assignments.map((assignment) => (
+            <option key={assignment.id} value={assignment.id} style={{ background: "#222" }}>
+              {assignment.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }

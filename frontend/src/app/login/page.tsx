@@ -14,16 +14,12 @@ export default function LoginPage() {
   const handleLogin = async (role: "TEACHER" | "STUDENT") => {
     setError("");
     let targetEmail = email.trim();
-    
-    // Auto-fill test emails if user leaves input empty
+
     if (!targetEmail) {
-      if (role === "TEACHER") {
-        targetEmail = "teacher@hust.edu.vn";
-      } else {
-        targetEmail = "nam.tv231234@sis.hust.edu.vn";
-      }
+      targetEmail = role === "TEACHER"
+        ? "teacher@hust.edu.vn"
+        : "nam.tv20231234@sis.hust.edu.vn";
     } else {
-      // Validate domain correctness case-insensitively
       const lowerEmail = targetEmail.toLowerCase();
       if (role === "TEACHER" && !lowerEmail.endsWith("@hust.edu.vn")) {
         setError("Email giảng viên phải kết thúc bằng @hust.edu.vn");
@@ -42,8 +38,8 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: targetEmail,
-          name: name.trim() || undefined
-        })
+          name: name.trim() || undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -63,7 +59,7 @@ export default function LoginPage() {
         router.push("/student");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Khong the ket noi den may chu.");
+      setError(err instanceof Error ? err.message : "Không thể kết nối đến máy chủ.");
     } finally {
       setIsLoading(false);
     }
@@ -72,7 +68,7 @@ export default function LoginPage() {
   return (
     <>
       <div className="bg-glow-mesh"></div>
-      
+
       <header className="header">
         <div className="container header-container">
           <Link href="/" className="logo">
@@ -89,7 +85,7 @@ export default function LoginPage() {
         <div className="login-card-wrapper">
           <div className="login-card">
             <div style={{ marginBottom: "1rem", fontSize: "3rem" }}>🔐</div>
-            <h1 className="login-title">Đăng Nhập Hệ Thống</h1>
+            <h1 className="login-title">Đăng nhập hệ thống</h1>
             <p className="login-subtitle">
               Nhập email và tên của bạn để giả lập xác thực Google OAuth 2.0.
             </p>
@@ -103,26 +99,30 @@ export default function LoginPage() {
                 borderRadius: "var(--radius-sm)",
                 fontSize: "0.85rem",
                 marginBottom: "1rem",
-                textAlign: "left"
+                textAlign: "left",
               }}>
-                ⚠️ {error}
+                Cảnh báo: {error}
               </div>
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.5rem", textAlign: "left" }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: "0.85rem" }}>Địa chỉ Email (Để trống sẽ tự động điền email test)</label>
+                <label className="form-label" style={{ fontSize: "0.85rem" }}>
+                  Địa chỉ email, để trống sẽ tự điền email test
+                </label>
                 <input
                   type="email"
                   className="form-control"
-                  placeholder="Ví dụ: nam.tv231234@sis.hust.edu.vn"
+                  placeholder="Ví dụ: nam.tv20231234@sis.hust.edu.vn"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   style={{ background: "rgba(255,255,255,0.03)" }}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: "0.85rem" }}>Họ và Tên (Không bắt buộc)</label>
+                <label className="form-label" style={{ fontSize: "0.85rem" }}>
+                  Họ và tên, không bắt buộc
+                </label>
                 <input
                   type="text"
                   className="form-control"
@@ -147,7 +147,7 @@ export default function LoginPage() {
                   <path fill="#FBBC05" d="M5.35 10.63c-.25-.75-.39-1.56-.39-2.38 0-.82.14-1.63.39-2.38L1.39 2.8C.5 4.57 0 6.57 0 8.75c0 2.18.5 4.18 1.39 5.95l3.96-3.07z" />
                   <path fill="#34A853" d="M12 15.96c-3.06 0-5.69-2.51-6.65-5.59L1.39 13.44C3.37 17.33 7.35 20 12 20c2.98 0 5.67-1.04 7.69-2.84l-3.66-2.84c-1.02.68-2.36 1.64-4.03 1.64z" />
                 </svg>
-                <span>{isLoading ? "Đang xử lý..." : "Đăng nhập Giảng viên (@hust.edu.vn)"}</span>
+                <span>{isLoading ? "Đang xử lý..." : "Đăng nhập giảng viên (@hust.edu.vn)"}</span>
               </button>
 
               <button
@@ -162,12 +162,12 @@ export default function LoginPage() {
                   <path fill="#FBBC05" d="M5.35 10.63c-.25-.75-.39-1.56-.39-2.38 0-.82.14-1.63.39-2.38L1.39 2.8C.5 4.57 0 6.57 0 8.75c0 2.18.5 4.18 1.39 5.95l3.96-3.07z" />
                   <path fill="#34A853" d="M12 15.96c-3.06 0-5.69-2.51-6.65-5.59L1.39 13.44C3.37 17.33 7.35 20 12 20c2.98 0 5.67-1.04 7.69-2.84l-3.66-2.84c-1.02.68-2.36 1.64-4.03 1.64z" />
                 </svg>
-                <span>{isLoading ? "Đang xử lý..." : "Đăng nhập Sinh viên (@sis.hust.edu.vn)"}</span>
+                <span>{isLoading ? "Đang xử lý..." : "Đăng nhập sinh viên (@sis.hust.edu.vn)"}</span>
               </button>
             </div>
 
             <div className="login-footer-info">
-              Hệ thống sử dụng cổng xác thực giả lập dev-auth phục vụ phát triển phần mềm TRS Rebuild.
+              Hệ thống sử dụng cổng xác thực giả lập phục vụ phát triển phần mềm TRS Rebuild.
             </div>
           </div>
         </div>
