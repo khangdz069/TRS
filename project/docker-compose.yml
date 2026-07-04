@@ -18,11 +18,11 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend Service (Flask)
+  # Backend Service (Spring Boot)
   backend:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend-java/Dockerfile
     container_name: trs_backend
     ports:
       - "5102:5102"
@@ -32,13 +32,16 @@ services:
       - POSTGRES_PASSWORD=trs_pass
       - DB_HOST=db
       - DB_PORT=5432
-      - INIT_DB=True
       - GRADER_URL=http://grader:5103/api/grader
+      - JWT_SECRET=dev-secret-key-trs-rebuild
+      - UPLOAD_DIR=/app/uploads
     depends_on:
       db:
         condition: service_healthy
+      grader:
+        condition: service_started
     volumes:
-      - ../backend/app/files/matries:/app/backend/app/files/matries
+      - ../backend-java/uploads:/app/uploads
     restart: unless-stopped
 
   # Grader Service (Spring Boot)
