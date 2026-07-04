@@ -1,0 +1,65 @@
+services:
+  # Database Service (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: trs_database
+    environment:
+      POSTGRES_DB: trs_db
+      POSTGRES_USER: trs_user
+      POSTGRES_PASSWORD: trs_pass
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trs_user -d trs_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend Service (Flask)
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: trs_backend
+    ports:
+      - "5102:5102"
+    environment:
+      - POSTGRES_DB=trs_db
+      - POSTGRES_USER=trs_user
+      - POSTGRES_PASSWORD=trs_pass
+      - DB_HOST=db
+      - DB_PORT=5432
+      - INIT_DB=True
+      - GRADER_URL=http://grader:5103/api/grader
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../backend/app/files/matries:/app/backend/app/files/matries
+    restart: unless-stopped
+
+  # Grader Service (Spring Boot)
+  grader:
+    build:
+      context: ..
+      dockerfile: grader-java/Dockerfile
+    container_name: trs_grader
+    ports:
+      - "5103:5103"
+    restart: unless-stopped
+
+  # Frontend Service (Next.js + TypeScript)
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: trs_frontend
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

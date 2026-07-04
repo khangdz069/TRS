@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Java / Maven
+target/
+*.class
+*.jar
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Local/runtime files
+.env
+.env.*
+uploads/
+temp/
+tmp/
+*.log
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated project artifacts
+project/backups/
+project/archive/
+
+# Docker local metadata
+docker-compose.override.yml

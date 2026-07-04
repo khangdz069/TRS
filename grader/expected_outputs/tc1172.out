@@ -1,0 +1,4 @@
+X_train shape: 159x784
+X_test shape: 40x784
+y_train shape: 159x1
+y_test shape: 40x1

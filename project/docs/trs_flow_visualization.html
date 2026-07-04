@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TRS Rebuild - Luồng Dễ Hiểu Để Báo Cáo</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --surface-2: #eef2f7;
+      --text: #172033;
+      --muted: #667085;
+      --line: #d7dde8;
+      --blue: #2563eb;
+      --green: #0f766e;
+      --orange: #b45309;
+      --red: #dc2626;
+      --purple: #6d28d9;
+      --radius: 8px;
+      --shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    header {
+      background: #111827;
+      color: #ffffff;
+      padding: 28px 24px;
+      border-bottom: 4px solid var(--blue);
+    }
+
+    header .inner,
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 8px;
+      font-size: clamp(26px, 4vw, 38px);
+      line-height: 1.15;
+    }
+
+    header p {
+      max-width: 900px;
+      color: #d1d5db;
+      margin-bottom: 0;
+      font-size: 16px;
+    }
+
+    main {
+      padding: 24px 16px 56px;
+    }
+
+    section {
+      margin-top: 18px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .panel h2 {
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+
+    .lead {
+      font-size: 18px;
+      color: #344054;
+      margin-bottom: 0;
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .tag {
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #344054;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .card h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    .card p,
+    .card li {
+      color: #475467;
+    }
+
+    .card p:last-child {
+      margin-bottom: 0;
+    }
+
+    .role {
+      border-top: 5px solid var(--blue);
+    }
+
+    .role.student {
+      border-color: var(--green);
+    }
+
+    .role.grader {
+      border-color: var(--orange);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+
+    .step {
+      min-height: 134px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      position: relative;
+    }
+
+    .step::after {
+      content: ">";
+      position: absolute;
+      top: 50%;
+      right: -10px;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .step:last-child::after {
+      content: "";
+    }
+
+    .number {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #111827;
+      color: #ffffff;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .quote {
+      border-left: 5px solid var(--blue);
+      background: #eff6ff;
+      padding: 16px;
+      border-radius: var(--radius);
+      color: #1e3a8a;
+      font-weight: 700;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    th {
+      background: #111827;
+      color: #ffffff;
+      font-size: 14px;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code {
+      background: #eef2f7;
+      border: 1px solid #d7dde8;
+      border-radius: 6px;
+      padding: 2px 6px;
+      color: #111827;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.95em;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin-bottom: 0;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .do {
+      border-left: 5px solid var(--green);
+    }
+
+    .dont {
+      border-left: 5px solid var(--red);
+    }
+
+    .mini-title {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffffff;
+      background: #111827;
+      border-radius: 999px;
+      padding: 4px 9px;
+      margin-bottom: 10px;
+    }
+
+    .model-rsvd {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .model-timesvd {
+      color: var(--orange);
+      font-weight: 700;
+    }
+
+    .model-lstm {
+      color: var(--purple);
+      font-weight: 700;
+    }
+
+    footer {
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+      padding: 20px;
+    }
+
+    @media (max-width: 860px) {
+      .grid,
+      .grid.two,
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+        overflow-x: visible;
+      }
+
+      .step::after {
+        content: "v";
+        top: auto;
+        right: 16px;
+        bottom: -13px;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>TRS Rebuild: hiểu trong 10 phút</h1>
+      <p>
+        Đây là bản tóm tắt dễ đọc để báo cáo: xem project như một phần mềm bình thường,
+        nhưng có lõi nghiên cứu nằm ở phần gợi ý testcase.
+      </p>
+      <div class="tag-row">
+        <span class="tag">Frontend</span>
+        <span class="tag">Backend</span>
+        <span class="tag">Grader</span>
+        <span class="tag">Recommendation</span>
+        <span class="tag">RSVD / timeSVD / LSTM</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>1. Nói một câu là gì?</h2>
+      <p class="lead">
+        TRS Rebuild là hệ thống web cho sinh viên nộp code C++, hệ thống chấm bằng testcase,
+        rồi gợi ý một vài testcase sai quan trọng để sinh viên sửa bài hiệu quả hơn.
+      </p>
+    </section>
+
+    <section class="grid">
+      <article class="card role student">
+        <h3>Sinh viên</h3>
+        <p>Nộp file code, xem kết quả đúng/sai, xem testcase được gợi ý và gửi feedback.</p>
+      </article>
+      <article class="card role">
+        <h3>Giảng viên</h3>
+        <p>Tạo assignment, import danh sách sinh viên, xem phản hồi và thống kê.</p>
+      </article>
+      <article class="card role grader">
+        <h3>Hệ thống</h3>
+        <p>Backend nhận request, gọi grader, lưu kết quả và gọi recommendation engine.</p>
+      </article>
+    </section>
+
+    <section class="panel">
+      <h2>2. Luồng quan trọng nhất: sinh viên nộp bài</h2>
+      <div class="flow">
+        <div class="step">
+          <div class="number">1</div>
+          <strong>Student submit</strong>
+          <span>Frontend gửi bài lên backend.</span>
+        </div>
+        <div class="step">
+          <div class="number">2</div>
+          <strong>Backend nhận</strong>
+          <span>Route submission kiểm tra dữ liệu.</span>
+        </div>
+        <div class="step">
+          <div class="number">3</div>
+          <strong>Gọi grader</strong>
+          <span>Backend gửi code sang service chấm.</span>
+        </div>
+        <div class="step">
+          <div class="number">4</div>
+          <strong>Compile C++</strong>
+          <span>Grader biên dịch và chạy testcase.</span>
+        </div>
+        <div class="step">
+          <div class="number">5</div>
+          <strong>Lưu kết quả</strong>
+          <span>Backend lưu pass/fail từng testcase.</span>
+        </div>
+        <div class="step">
+          <div class="number">6</div>
+          <strong>Gợi ý</strong>
+          <span>Recommendation chọn tối đa 3 testcase sai.</span>
+        </div>
+        <div class="step">
+          <div class="number">7</div>
+          <strong>Feedback</strong>
+          <span>Sinh viên đánh giá gợi ý có hữu ích không.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>3. Phần mềm bình thường hay NCKH?</h2>
+      <div class="split">
+        <article class="card">
+          <span class="mini-title">Phần mềm bình thường</span>
+          <ul>
+            <li>Có màn hình đăng nhập, teacher, student.</li>
+            <li>Có backend API.</li>
+            <li>Có database lưu account, assignment, submission.</li>
+            <li>Có grader chấm code C++.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <span class="mini-title">Lõi NCKH</span>
+          <ul>
+            <li>Không chỉ trả về đúng/sai.</li>
+            <li>Hệ thống chọn testcase sai nào nên gợi ý.</li>
+            <li>Việc chọn dựa trên nhóm người học và matrix prediction.</li>
+            <li>Mục tiêu là hỗ trợ sinh viên sửa bài tốt hơn.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>4. RSVD, timeSVD, LSTM chạy thế nào?</h2>
+      <p>
+        Mỗi lần sinh viên nộp bài, hệ thống không chạy cả 3 mô hình.
+        Nó xác định sinh viên thuộc nhóm nào rồi chọn một mô hình tương ứng.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Nhóm sinh viên</th>
+            <th>Model được chọn</th>
+            <th>Ý nghĩa khi báo cáo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>apr1</code></td>
+            <td><span class="model-rsvd">RSVD</span></td>
+            <td>Dùng matrix dự đoán của RSVD để xếp hạng testcase fail.</td>
+          </tr>
+          <tr>
+            <td><code>apr2</code></td>
+            <td><span class="model-timesvd">timeSVD</span></td>
+            <td>Dùng matrix dự đoán của timeSVD cho nhóm này.</td>
+          </tr>
+          <tr>
+            <td><code>apr3</code></td>
+            <td><span class="model-lstm">LSTM</span></td>
+            <td>Dùng matrix dự đoán của LSTM cho nhóm này.</td>
+          </tr>
+          <tr>
+            <td><code>unknown</code></td>
+            <td><span class="model-rsvd">RSVD</span></td>
+            <td>Nếu không tìm được nhóm thì fallback về RSVD.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin-top: 12px; margin-bottom: 0;">
+        Các model đã có sẵn dưới dạng file <code>.npz</code>. Project hiện tại chủ yếu load matrix dự đoán,
+        không training lại model khi người dùng bấm nộp bài.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h2>5. Recommendation chọn testcase như thế nào?</h2>
+      <div class="flow">
+        <div class="step">
+          <div class="number">1</div>
+          <strong>Lấy testcase fail</strong>
+          <span>Ví dụ sinh viên sai 20 testcase.</span>
+        </div>
+        <div class="step">
+          <div class="number">2</div>
+          <strong>Xác định nhóm</strong>
+          <span>Nhóm là apr1, apr2, apr3 hoặc unknown.</span>
+        </div>
+        <div class="step">
+          <div class="number">3</div>
+          <strong>Chọn model</strong>
+          <span>Map nhóm sang RSVD, timeSVD hoặc LSTM.</span>
+        </div>
+        <div class="step">
+          <div class="number">4</div>
+          <strong>Load score</strong>
+          <span>Lấy điểm dự đoán từ matrix.</span>
+        </div>
+        <div class="step">
+          <div class="number">5</div>
+          <strong>Sort</strong>
+          <span>Sắp xếp testcase fail theo điểm giảm dần.</span>
+        </div>
+        <div class="step">
+          <div class="number">6</div>
+          <strong>Lấy top 3</strong>
+          <span>Chỉ gợi ý tối đa 3 testcase.</span>
+        </div>
+        <div class="step">
+          <div class="number">7</div>
+          <strong>Hiển thị</strong>
+          <span>Student xem testcase và gửi feedback.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>6. File nào ứng với phần nào?</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Phần</th>
+            <th>File nên đọc</th>
+            <th>Đọc để hiểu gì?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Màn hình sinh viên</td>
+            <td><code>frontend/src/app/student/page.tsx</code></td>
+            <td>Nút nộp bài, lịch sử submission, hiển thị recommendation.</td>
+          </tr>
+          <tr>
+            <td>Backend nhận submission</td>
+            <td><code>backend/app/routes/submission.py</code></td>
+            <td>Nhận bài nộp, gọi grader, lưu kết quả.</td>
+          </tr>
+          <tr>
+            <td>Máy chấm</td>
+            <td><code>grader/main.py</code></td>
+            <td>Compile C++, chạy testcase, trả về pass/fail.</td>
+          </tr>
+          <tr>
+            <td>Logic gợi ý</td>
+            <td><code>backend/app/services/recommendation_service.py</code></td>
+            <td>Chọn nhóm, chọn model, lấy top 3 testcase.</td>
+          </tr>
+          <tr>
+            <td>Load matrix model</td>
+            <td><code>backend/app/services/recommendation_engine.py</code></td>
+            <td>Load file .npz và lấy điểm dự đoán.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>7. Câu nói mẫu khi báo cáo</h2>
+      <div class="quote">
+        Project này có thể xem là một hệ thống phần mềm web bình thường ở phần giao diện,
+        backend, database và grader. Tuy nhiên điểm nghiên cứu nằm ở recommendation engine:
+        sau khi sinh viên nộp bài và có danh sách testcase sai, hệ thống dùng nhóm người học
+        và matrix dự đoán từ RSVD, timeSVD hoặc LSTM để chọn tối đa 3 testcase phù hợp nhất
+        nhằm hỗ trợ sinh viên sửa bài.
+      </div>
+    </section>
+
+    <section class="grid two">
+      <article class="card do">
+        <h3>Nên nói</h3>
+        <ul>
+          <li>Hệ thống chọn một model theo nhóm sinh viên.</li>
+          <li>Model đã có matrix dự đoán sẵn trong file .npz.</li>
+          <li>Recommendation chỉ xếp hạng các testcase đang fail.</li>
+          <li>Mục tiêu là gợi ý testcase có ích, không đưa hết lỗi ra cùng lúc.</li>
+        </ul>
+      </article>
+      <article class="card dont">
+        <h3>Không nên nói</h3>
+        <ul>
+          <li>Hệ thống chạy cả 3 model mỗi lần sinh viên nộp bài.</li>
+          <li>Project training LSTM/RSVD/timeSVD trực tiếp lúc submit.</li>
+          <li>Recommendation chọn testcase ngẫu nhiên.</li>
+          <li>Đây chỉ là phần mềm CRUD bình thường.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+
+  <footer>
+    TRS Rebuild - bản đọc nhanh cho báo cáo.
+  </footer>
+</body>
+</html>
