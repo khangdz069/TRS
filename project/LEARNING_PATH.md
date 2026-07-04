@@ -35,12 +35,12 @@ File can doc:
 
 ```text
 frontend/src/app/student/page.tsx
-backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java
-backend-java/src/main/java/com/trs/backend/service/SubmissionService.java
-grader-java/src/main/java/com/trs/grader/GraderController.java
-grader-java/src/main/java/com/trs/grader/GraderService.java
-backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
-backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
+backend/src/main/java/com/trs/backend/controller/SubmissionController.java
+backend/src/main/java/com/trs/backend/service/SubmissionService.java
+grader/src/main/java/com/trs/grader/GraderController.java
+grader/src/main/java/com/trs/grader/GraderService.java
+backend/src/main/java/com/trs/backend/service/RecommendationService.java
+backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
 model-python/app.py
 ```
 
@@ -56,13 +56,13 @@ Cach doc:
 Entity can doc:
 
 ```text
-backend-java/src/main/java/com/trs/backend/model/
+backend/src/main/java/com/trs/backend/model/
 ```
 
 Repository can doc:
 
 ```text
-backend-java/src/main/java/com/trs/backend/repository/
+backend/src/main/java/com/trs/backend/repository/
 ```
 
 Object quan trong:
@@ -91,10 +91,10 @@ Cau hoi can tra loi:
 File can doc:
 
 ```text
-backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
-backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
-backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java
-backend-java/src/main/java/com/trs/backend/model/Recommendation.java
+backend/src/main/java/com/trs/backend/service/RecommendationService.java
+backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
+backend/src/main/java/com/trs/backend/repository/RecommendationRepository.java
+backend/src/main/java/com/trs/backend/model/Recommendation.java
 model-python/app.py
 ```
 
@@ -118,9 +118,9 @@ Cau hoi can tra loi:
 File can doc:
 
 ```text
-grader-java/src/main/java/com/trs/grader/GraderService.java
-grader-java/assets/support-files/
-grader-java/assets/expected_outputs/
+grader/src/main/java/com/trs/grader/GraderService.java
+grader/assets/support-files/
+grader/assets/expected_outputs/
 ```
 
 ## Giai Doan 6 - Chuan Bi Bao Cao
@@ -146,22 +146,22 @@ Ngay 2:
 
 Ngay 3:
 
-- Doc `backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java`.
-- Doc `backend-java/src/main/java/com/trs/backend/service/SubmissionService.java`.
+- Doc `backend/src/main/java/com/trs/backend/controller/SubmissionController.java`.
+- Doc `backend/src/main/java/com/trs/backend/service/SubmissionService.java`.
 
 Ngay 4:
 
-- Doc `grader-java/src/main/java/com/trs/grader/GraderService.java`.
+- Doc `grader/src/main/java/com/trs/grader/GraderService.java`.
 - Hieu compile, run testcase, compare output.
 
 Ngay 5:
 
-- Doc `backend-java/src/main/java/com/trs/backend/service/RecommendationService.java`.
+- Doc `backend/src/main/java/com/trs/backend/service/RecommendationService.java`.
 - Hieu business rules: no testcase, daily limit, previous recommendation.
 
 Ngay 6:
 
-- Doc `backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java`.
+- Doc `backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java`.
 - Doc `model-python/app.py`.
 
 Ngay 7:

@@ -22,7 +22,7 @@ services:
   backend:
     build:
       context: ..
-      dockerfile: backend-java/Dockerfile
+      dockerfile: backend/Dockerfile
     container_name: trs_backend
     ports:
       - "5102:5102"
@@ -44,14 +44,14 @@ services:
       model:
         condition: service_started
     volumes:
-      - ../backend-java/uploads:/app/uploads
+      - ../backend/uploads:/app/uploads
     restart: unless-stopped
 
   # Grader Service (Spring Boot)
   grader:
     build:
       context: ..
-      dockerfile: grader-java/Dockerfile
+      dockerfile: grader/Dockerfile
     container_name: trs_grader
     ports:
       - "5103:5103"

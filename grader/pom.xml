@@ -11,9 +11,9 @@
     </parent>
 
     <groupId>com.trs</groupId>
-    <artifactId>grader-java</artifactId>
+    <artifactId>grader</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>trs-grader-java</name>
+    <name>trs-grader</name>
     <description>Java Spring Boot grader service for TRS</description>
 
     <properties>

@@ -22,8 +22,8 @@ Vai tro chinh:
 
 ```text
 frontend/      -> Next.js UI, http://localhost:3100
-backend-java/  -> Spring Boot API, http://localhost:5102
-grader-java/   -> Spring Boot C++ grader, http://localhost:5103
+backend/  -> Spring Boot API, http://localhost:5102
+grader/   -> Spring Boot C++ grader, http://localhost:5103
 model-python/  -> Python recommendation model, http://localhost:5104
 database       -> PostgreSQL, localhost:55432
 ```
@@ -51,26 +51,26 @@ Login:
 
 ```text
 frontend/src/app/login/page.tsx
-backend-java/src/main/java/com/trs/backend/controller/AuthController.java
-backend-java/src/main/java/com/trs/backend/service/AuthService.java
+backend/src/main/java/com/trs/backend/controller/AuthController.java
+backend/src/main/java/com/trs/backend/service/AuthService.java
 ```
 
 Teacher:
 
 ```text
 frontend/src/app/teacher/page.tsx
-backend-java/src/main/java/com/trs/backend/controller/AssignmentController.java
-backend-java/src/main/java/com/trs/backend/controller/StudentController.java
-backend-java/src/main/java/com/trs/backend/controller/FormController.java
+backend/src/main/java/com/trs/backend/controller/AssignmentController.java
+backend/src/main/java/com/trs/backend/controller/StudentController.java
+backend/src/main/java/com/trs/backend/controller/FormController.java
 ```
 
 Student:
 
 ```text
 frontend/src/app/student/page.tsx
-backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java
-backend-java/src/main/java/com/trs/backend/controller/RecommendationController.java
-backend-java/src/main/java/com/trs/backend/controller/FormController.java
+backend/src/main/java/com/trs/backend/controller/SubmissionController.java
+backend/src/main/java/com/trs/backend/controller/RecommendationController.java
+backend/src/main/java/com/trs/backend/controller/FormController.java
 ```
 
 ## Luong Nop Bai Quan Trong Nhat
@@ -80,24 +80,24 @@ frontend/src/app/student/page.tsx
         |
         | POST /api/submissions
         v
-backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java
+backend/src/main/java/com/trs/backend/controller/SubmissionController.java
         |
         v
-backend-java/src/main/java/com/trs/backend/service/SubmissionService.java
+backend/src/main/java/com/trs/backend/service/SubmissionService.java
         |
         | POST sang grader /api/grader
         v
-grader-java/src/main/java/com/trs/grader/GraderController.java
+grader/src/main/java/com/trs/grader/GraderController.java
         |
         v
-grader-java/src/main/java/com/trs/grader/GraderService.java
+grader/src/main/java/com/trs/grader/GraderService.java
         |
         | tra ve scores, failed_outputs
         v
-backend-java luu Submission
+backend luu Submission
         |
         v
-backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
+backend/src/main/java/com/trs/backend/service/RecommendationService.java
         |
         | POST sang model /api/model/recommend
         v
@@ -111,10 +111,10 @@ Neu chi doc mot luong truoc khi bao cao hoac debug, hay doc luong nay.
 File can doc:
 
 ```text
-backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
-backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
-backend-java/src/main/java/com/trs/backend/model/Recommendation.java
-backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java
+backend/src/main/java/com/trs/backend/service/RecommendationService.java
+backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
+backend/src/main/java/com/trs/backend/model/Recommendation.java
+backend/src/main/java/com/trs/backend/repository/RecommendationRepository.java
 model-python/app.py
 model-python/models/
 ```
@@ -133,10 +133,10 @@ Y tuong hien tai:
 File can doc:
 
 ```text
-grader-java/src/main/java/com/trs/grader/GraderController.java
-grader-java/src/main/java/com/trs/grader/GraderService.java
-grader-java/assets/support-files/
-grader-java/assets/expected_outputs/
+grader/src/main/java/com/trs/grader/GraderController.java
+grader/src/main/java/com/trs/grader/GraderService.java
+grader/assets/support-files/
+grader/assets/expected_outputs/
 ```
 
 Grader lam cac viec chinh:
@@ -153,13 +153,13 @@ Grader lam cac viec chinh:
 Entity nam trong:
 
 ```text
-backend-java/src/main/java/com/trs/backend/model/
+backend/src/main/java/com/trs/backend/model/
 ```
 
 Repository nam trong:
 
 ```text
-backend-java/src/main/java/com/trs/backend/repository/
+backend/src/main/java/com/trs/backend/repository/
 ```
 
 Bang chinh:
@@ -176,15 +176,15 @@ Bang chinh:
 ## Thu Tu Doc Code
 
 1. `frontend/src/app/student/page.tsx`
-2. `backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java`
-3. `backend-java/src/main/java/com/trs/backend/service/SubmissionService.java`
-4. `grader-java/src/main/java/com/trs/grader/GraderService.java`
-5. `backend-java/src/main/java/com/trs/backend/model/Submission.java`
-6. `backend-java/src/main/java/com/trs/backend/service/RecommendationService.java`
-7. `backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java`
+2. `backend/src/main/java/com/trs/backend/controller/SubmissionController.java`
+3. `backend/src/main/java/com/trs/backend/service/SubmissionService.java`
+4. `grader/src/main/java/com/trs/grader/GraderService.java`
+5. `backend/src/main/java/com/trs/backend/model/Submission.java`
+6. `backend/src/main/java/com/trs/backend/service/RecommendationService.java`
+7. `backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java`
 8. `model-python/app.py`
 9. `frontend/src/app/teacher/page.tsx`
-10. Cac entity con lai trong `backend-java/src/main/java/com/trs/backend/model/`
+10. Cac entity con lai trong `backend/src/main/java/com/trs/backend/model/`
 
 ## Ghi Chu Hien Trang
 

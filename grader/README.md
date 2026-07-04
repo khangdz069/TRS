@@ -19,7 +19,7 @@ The service listens on port `5103`.
 
 The request and response JSON shapes match the backend contract so the current backend can keep using `GRADER_URL=http://grader:5103/api/grader`.
 
-Runtime testcase assets are stored inside `grader-java/assets`:
+Runtime testcase assets are stored inside `grader/assets`:
 
 - `assets/support-files`
 - `assets/expected_outputs`
@@ -29,5 +29,5 @@ Runtime testcase assets are stored inside `grader-java/assets`:
 Build from the repository root because the Dockerfile copies the grader assets:
 
 ```bash
-docker build -f grader-java/Dockerfile .
+docker build -f grader/Dockerfile .
 ```

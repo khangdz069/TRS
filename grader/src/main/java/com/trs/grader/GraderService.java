@@ -47,8 +47,8 @@ public class GraderService {
     public GradeOutcome grade(GraderRequest request) {
         logger.info("Start grading submission {} for student {}", request.submissionId(), request.studentId());
 
-        Path supportFilesDir = resolveDirectory(supportFilesDirConfig, "grader-java/assets/support-files");
-        Path expectedOutputsDir = resolveDirectory(expectedOutputsDirConfig, "grader-java/assets/expected_outputs");
+        Path supportFilesDir = resolveDirectory(supportFilesDirConfig, "grader/assets/support-files");
+        Path expectedOutputsDir = resolveDirectory(expectedOutputsDirConfig, "grader/assets/expected_outputs");
         Path tempDir = Paths.get(tempDirConfig).toAbsolutePath().normalize();
         Path workspacePath = tempDir.resolve("submission_" + safeWorkspaceName(request.submissionId()));
 

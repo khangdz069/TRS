@@ -1,9 +1,9 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 
 WORKDIR /workspace
-COPY grader-java/pom.xml grader-java/pom.xml
-COPY grader-java/src grader-java/src
-RUN mvn -f grader-java/pom.xml -DskipTests package
+COPY grader/pom.xml grader/pom.xml
+COPY grader/src grader/src
+RUN mvn -f grader/pom.xml -DskipTests package
 
 FROM eclipse-temurin:21-jre
 
@@ -12,9 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=build /workspace/grader-java/target/grader-java-0.0.1-SNAPSHOT.jar app.jar
-COPY grader-java/assets/support-files ./support-files
-COPY grader-java/assets/expected_outputs ./expected_outputs
+COPY --from=build /workspace/grader/target/grader-0.0.1-SNAPSHOT.jar app.jar
+COPY grader/assets/support-files ./support-files
+COPY grader/assets/expected_outputs ./expected_outputs
 
 RUN mkdir -p /app/temp
 

@@ -7,8 +7,8 @@ TRS Rebuild la prototype cho he thong nop bai, cham code C++ va goi y testcase h
 ```text
 trs-rebuild/
   frontend/      Next.js + TypeScript, port 3100
-  backend-java/  Spring Boot backend API, port 5102
-  grader-java/   Spring Boot C++ grader, port 5103
+  backend/       Spring Boot backend API, port 5102
+  grader/        Spring Boot C++ grader, port 5103
   model-python/  Python black-box model service, port 5104
   project/       Docker Compose, tai lieu, du lieu mau va backup local
 ```
@@ -63,14 +63,14 @@ npm run dev
 Backend Java:
 
 ```bash
-cd backend-java
+cd backend
 mvn spring-boot:run
 ```
 
 Grader Java:
 
 ```bash
-cd grader-java
+cd grader
 mvn spring-boot:run
 ```
 

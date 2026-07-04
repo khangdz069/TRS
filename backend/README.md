@@ -29,7 +29,7 @@ Useful environment variables:
 Build from the repository root:
 
 ```bash
-docker build -f backend-java/Dockerfile .
+docker build -f backend/Dockerfile .
 ```
 
 ## Notes

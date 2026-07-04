@@ -11,9 +11,9 @@
     </parent>
 
     <groupId>com.trs</groupId>
-    <artifactId>backend-java</artifactId>
+    <artifactId>backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>trs-backend-java</name>
+    <name>trs-backend</name>
     <description>Java Spring Boot backend for TRS Rebuild</description>
 
     <properties>

@@ -88,7 +88,7 @@ Student flow:
 Backend Java:
 
 ```bash
-cd backend-java
+cd backend
 mvn test
 mvn spring-boot:run
 ```
@@ -96,7 +96,7 @@ mvn spring-boot:run
 Grader Java:
 
 ```bash
-cd grader-java
+cd grader
 mvn test
 mvn spring-boot:run
 ```
@@ -149,11 +149,11 @@ Open a pull request on GitHub before merging to `main`.
 ## Project Layout
 
 ```text
-frontend/      Next.js UI
-backend-java/  Spring Boot backend API
-grader-java/   Spring Boot C++ grader and testcase assets
-model-python/  Python black-box recommendation model
-project/       Docker Compose and local backups
+frontend/       Next.js UI
+backend/        Spring Boot backend API
+grader/         Spring Boot C++ grader and testcase assets
+model-python/   Python black-box recommendation model
+project/        Docker Compose and local backups
 ```
 
 ## Known Limitations
