@@ -1,61 +1,69 @@
-# Lộ Trình Hiểu Code TRS Rebuild
+# Lo Trinh Hieu Code TRS Rebuild
 
-Mục tiêu: đi từ "mở được app" đến "giải thích được luồng nộp bài, grader và recommendation".
+Muc tieu: di tu "mo duoc app" den "giai thich duoc luong nop bai, grader va recommendation" trong code Java hien tai.
 
-## Giai Đoạn 1 - Hiểu Theo Người Dùng
+## Giai Doan 1 - Hieu Theo Nguoi Dung
 
-Bạn cần trả lời được:
+Ban can tra loi duoc:
 
-- Teacher làm được gì?
-- Student làm được gì?
-- Submission là gì?
-- Recommendation là gì?
-- Feedback form dùng để làm gì?
+- Teacher lam duoc gi?
+- Student lam duoc gi?
+- Submission la gi?
+- Recommendation la gi?
+- Feedback form dung de lam gi?
 
-Kết quả mong muốn:
-
-```text
-Mở app -> login -> tạo assignment -> import sinh viên -> nộp bài -> xem kết quả
-```
-
-## Giai Đoạn 2 - Hiểu Một Request Đi Đâu
-
-Học request nộp bài:
+Ket qua mong muon:
 
 ```text
-Student bấm Submit
--> frontend gọi POST /api/submissions
--> backend lưu dữ liệu và gọi grader
--> grader compile/chạy testcase
--> backend lưu kết quả
--> backend tạo recommendation
+Mo app -> login -> tao assignment -> import sinh vien -> nop bai -> xem ket qua
 ```
 
-File cần đọc:
+## Giai Doan 2 - Hieu Mot Request Di Dau
+
+Hoc request nop bai:
+
+```text
+Student bam Submit
+-> frontend goi POST /api/submissions
+-> backend Java luu du lieu va goi grader
+-> grader Java compile/chay testcase
+-> backend Java luu ket qua
+-> backend Java tao recommendation
+```
+
+File can doc:
 
 ```text
 frontend/src/app/student/page.tsx
-backend/app/routes/submission.py
-grader/main.py
-backend/app/services/recommendation_service.py
+backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java
+backend-java/src/main/java/com/trs/backend/service/SubmissionService.java
+grader-java/src/main/java/com/trs/grader/GraderController.java
+grader-java/src/main/java/com/trs/grader/GraderService.java
+backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
 ```
 
-Cách đọc:
+Cach doc:
 
-- Trong frontend, tìm các lệnh `fetch`.
-- Trong backend, tìm route tạo submission.
-- Trong route submission, tìm đoạn gọi `GRADER_URL`.
-- Trong grader, tìm endpoint `/api/grader`.
+- Trong frontend, tim cac lenh `fetch`.
+- Trong controller, tim endpoint tao submission.
+- Trong service, tim doan goi `GRADER_URL`.
+- Trong grader, tim endpoint `/api/grader`.
 
-## Giai Đoạn 3 - Hiểu Dữ Liệu
+## Giai Doan 3 - Hieu Du Lieu
 
-File cần đọc:
+Entity can doc:
 
 ```text
-backend/app/models/
+backend-java/src/main/java/com/trs/backend/model/
 ```
 
-Các object quan trọng:
+Repository can doc:
+
+```text
+backend-java/src/main/java/com/trs/backend/repository/
+```
+
+Object quan trong:
 
 - Account
 - Student
@@ -64,93 +72,92 @@ Các object quan trọng:
 - Submission
 - Recommendation
 - FeedbackForm
-- MatrixFactorization
 
-Mỗi class model tương ứng một bảng database. Mỗi `db.Column` là một cột. Mỗi `db.relationship` là quan hệ giữa các bảng.
+Moi class entity tuong ung voi mot bang database. Moi field co annotation JPA la mot cot hoac quan he giua cac bang.
 
-## Giai Đoạn 4 - Hiểu Recommendation
+## Giai Doan 4 - Hieu Recommendation
 
-Câu hỏi cần trả lời:
+Cau hoi can tra loi:
 
-- Vì sao chỉ gợi ý tối đa 3 testcase?
-- Testcase được chọn từ đâu?
-- RSVD, timeSVD, LSTM nằm ở đâu?
-- Khi không tìm thấy sinh viên trong matrix thì fallback thế nào?
+- Vi sao chi goi y toi da 3 testcase?
+- Testcase duoc chon tu dau?
+- Khi sinh vien chua sua testcase goi y lan truoc thi sao?
+- Khi het gioi han trong ngay thi sao?
+- Fallback Java dang chon testcase nhu the nao?
 
-File cần đọc:
-
-```text
-backend/app/services/recommendation_service.py
-backend/app/services/recommendation_engine.py
-backend/app/models/matrix_factorization.py
-```
-
-Câu giải thích ngắn:
+File can doc:
 
 ```text
-Hệ thống lấy các testcase fail, chấm điểm chúng bằng model prediction,
-rồi chọn tối đa 3 testcase có điểm cao nhất để gợi ý cho sinh viên.
+backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
+backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java
+backend-java/src/main/java/com/trs/backend/model/Recommendation.java
 ```
 
-## Giai Đoạn 5 - Hiểu Grader
-
-Câu hỏi cần trả lời:
-
-- Code sinh viên được compile ở đâu?
-- Bộ testcase đến từ đâu?
-- Expected output nằm ở đâu?
-- Khi compile lỗi thì backend nhận gì?
-- Khi output sai thì backend nhận gì?
-
-File cần đọc:
+Cau giai thich ngan:
 
 ```text
-grader/main.py
-grader/support-files/
-grader/expected_outputs/
+He thong lay cac testcase fail, kiem tra dieu kien nghiep vu,
+roi chon toi da 3 testcase de goi y cho sinh vien.
 ```
 
-## Giai Đoạn 6 - Chuẩn Bị Báo Cáo
+## Giai Doan 5 - Hieu Grader
 
-Nên chuẩn bị 4 phần:
+Cau hoi can tra loi:
 
-1. Bài toán: sinh viên cần gợi ý testcase phù hợp sau khi nộp bài.
-2. Hệ thống: web app, backend, grader, recommendation engine.
-3. Phương pháp: learner grouping, matrix prediction, ranking failed testcases.
-4. Đánh giá: testcase được gợi ý, feedback sinh viên, tỉ lệ sửa được lỗi.
+- Code sinh vien duoc compile o dau?
+- Bo testcase den tu dau?
+- Expected output nam o dau?
+- Khi compile loi thi backend nhan gi?
+- Khi output sai thi backend nhan gi?
 
-## Lịch Đọc Gợi Ý
+File can doc:
 
-Ngày 1:
+```text
+grader-java/src/main/java/com/trs/grader/GraderService.java
+grader-java/assets/support-files/
+grader-java/assets/expected_outputs/
+```
 
-- Đọc `PROJECT_MAP.md`.
-- Mở app và đi hết luồng người dùng.
+## Giai Doan 6 - Chuan Bi Bao Cao
 
-Ngày 2:
+Nen chuan bi 4 phan:
 
-- Đọc `frontend/src/app/student/page.tsx`.
-- Tập trung vào các hàm `fetch`.
+1. Bai toan: sinh vien can goi y testcase phu hop sau khi nop bai.
+2. He thong: web app, backend Java, grader Java, recommendation service.
+3. Phuong phap: ranking failed testcases va cac rule nghiep vu.
+4. Danh gia: testcase duoc goi y, feedback sinh vien, ti le sua duoc loi.
 
-Ngày 3:
+## Lich Doc Goi Y
 
-- Đọc `backend/app/routes/submission.py`.
-- Vẽ lại luồng nộp bài.
+Ngay 1:
 
-Ngày 4:
+- Doc `PROJECT_MAP.md`.
+- Mo app va di het luong nguoi dung.
 
-- Đọc `grader/main.py`.
-- Hiểu compile, run testcase, compare output.
+Ngay 2:
 
-Ngày 5:
+- Doc `frontend/src/app/student/page.tsx`.
+- Tap trung vao cac ham `fetch`.
 
-- Đọc `backend/app/services/recommendation_service.py`.
-- Hiểu business rules: no testcase, daily limit, previous recommendation.
+Ngay 3:
 
-Ngày 6:
+- Doc `backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java`.
+- Doc `backend-java/src/main/java/com/trs/backend/service/SubmissionService.java`.
 
-- Đọc `backend/app/services/recommendation_engine.py`.
-- Hiểu group, model, matrix và fallback.
+Ngay 4:
 
-Ngày 7:
+- Doc `grader-java/src/main/java/com/trs/grader/GraderService.java`.
+- Hieu compile, run testcase, compare output.
 
-- Tự giải thích project trong 5 phút mà không nhìn code.
+Ngay 5:
+
+- Doc `backend-java/src/main/java/com/trs/backend/service/RecommendationService.java`.
+- Hieu business rules: no testcase, daily limit, previous recommendation.
+
+Ngay 6:
+
+- Doc entity va repository.
+
+Ngay 7:
+
+- Tu giai thich project trong 5 phut ma khong nhin code.

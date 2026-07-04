@@ -1,6 +1,6 @@
 # TRS Grader Java
 
-Spring Boot replacement for the original Flask grader in `grader/main.py`.
+Spring Boot C++ grader for TRS.
 
 ## Run locally
 
@@ -17,11 +17,16 @@ The service listens on port `5103`.
 - `GET /api/health`
 - `POST /api/grader`
 
-The request and response JSON shapes match the existing Python grader so the current backend can keep using `GRADER_URL=http://grader:5103/api/grader`.
+The request and response JSON shapes match the backend contract so the current backend can keep using `GRADER_URL=http://grader:5103/api/grader`.
+
+Runtime testcase assets are stored inside `grader-java/assets`:
+
+- `assets/support-files`
+- `assets/expected_outputs`
 
 ## Docker
 
-Build from the repository root because the Dockerfile copies support files from `grader/`:
+Build from the repository root because the Dockerfile copies the grader assets:
 
 ```bash
 docker build -f grader-java/Dockerfile .

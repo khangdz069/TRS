@@ -1,152 +1,159 @@
-# TRS Rebuild - Bản Đồ Project
+# TRS Rebuild - Ban Do Project
 
-File này giúp đọc project theo luồng người dùng trước, rồi mới đi vào code.
+File nay giup doc project theo luong nguoi dung truoc, roi moi di vao code.
 
-## Project Là Gì?
+## Project La Gi?
 
-TRS Rebuild là hệ thống prototype cho bài toán:
-
-```text
-Sinh viên nộp code C++ -> hệ thống chấm testcase -> hệ thống gợi ý vài testcase nên xem lại
-```
-
-Các vai trò chính:
-
-- Teacher tạo assignment, import danh sách sinh viên và xem analytics feedback.
-- Student xem assignment, nộp code, xem lịch sử chấm, xem testcase được gợi ý và gửi feedback.
-- Backend điều phối dữ liệu, gọi grader và lưu kết quả.
-- Grader compile/chạy code C++ qua bộ testcase.
-- Recommendation engine chọn tối đa 3 testcase fail có ích để gợi ý.
-
-## Bốn Khối Chạy Chính
+TRS Rebuild la he thong prototype cho bai toan:
 
 ```text
-frontend/   -> Next.js UI, http://localhost:3100
-backend/    -> Flask API chính, http://localhost:5102
-grader/     -> Flask grader, http://localhost:5103
-database    -> PostgreSQL, localhost:55432
+Sinh vien nop code C++ -> he thong cham testcase -> he thong goi y vai testcase nen xem lai
 ```
 
-Người dùng chỉ cần mở frontend ở `http://localhost:3100`.
+Vai tro chinh:
 
-## Luồng Người Dùng
+- Teacher tao assignment, import danh sach sinh vien va xem analytics feedback.
+- Student xem assignment, nop code, xem lich su cham, xem testcase duoc goi y va gui feedback.
+- Backend Java dieu phoi du lieu, goi grader va luu ket qua.
+- Grader Java compile/chay code C++ qua bo testcase.
+- Recommendation service chon toi da 3 testcase fail de goi y.
+
+## Bon Khoi Chay Chinh
+
+```text
+frontend/      -> Next.js UI, http://localhost:3100
+backend-java/  -> Spring Boot API, http://localhost:5102
+grader-java/   -> Spring Boot C++ grader, http://localhost:5103
+database       -> PostgreSQL, localhost:55432
+```
+
+Nguoi dung chi can mo frontend o `http://localhost:3100`.
+
+## Luong Nguoi Dung
 
 ```text
 1. Login
-2. Teacher tạo assignment
-3. Teacher import sinh viên
+2. Teacher tao assignment
+3. Teacher import sinh vien
 4. Student xem assignment
-5. Student nộp code
-6. Backend gửi code sang grader
-7. Grader compile và chạy testcase
-8. Backend lưu submission và scores
-9. Recommendation engine chọn testcase fail để gợi ý
-10. Student xem gợi ý và gửi feedback
+5. Student nop code
+6. Backend Java gui code sang grader Java
+7. Grader Java compile va chay testcase
+8. Backend Java luu submission va scores
+9. Recommendation service chon testcase fail de goi y
+10. Student xem goi y va gui feedback
 ```
 
-## File Theo Màn Hình
+## File Theo Man Hinh
 
 Login:
 
 ```text
 frontend/src/app/login/page.tsx
-backend/app/routes/auth.py
-backend/app/services/auth_service.py
+backend-java/src/main/java/com/trs/backend/controller/AuthController.java
+backend-java/src/main/java/com/trs/backend/service/AuthService.java
 ```
 
 Teacher:
 
 ```text
 frontend/src/app/teacher/page.tsx
-backend/app/routes/assignment.py
-backend/app/routes/student.py
-backend/app/routes/form.py
+backend-java/src/main/java/com/trs/backend/controller/AssignmentController.java
+backend-java/src/main/java/com/trs/backend/controller/StudentController.java
+backend-java/src/main/java/com/trs/backend/controller/FormController.java
 ```
 
 Student:
 
 ```text
 frontend/src/app/student/page.tsx
-backend/app/routes/submission.py
-backend/app/routes/recommendation.py
-backend/app/routes/form.py
+backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java
+backend-java/src/main/java/com/trs/backend/controller/RecommendationController.java
+backend-java/src/main/java/com/trs/backend/controller/FormController.java
 ```
 
-## Luồng Nộp Bài Quan Trọng Nhất
+## Luong Nop Bai Quan Trong Nhat
 
 ```text
 frontend/src/app/student/page.tsx
         |
         | POST /api/submissions
         v
-backend/app/routes/submission.py
+backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java
+        |
+        v
+backend-java/src/main/java/com/trs/backend/service/SubmissionService.java
         |
         | POST sang grader /api/grader
         v
-grader/main.py
-        |
-        | trả về scores, failed_outputs
-        v
-backend lưu Submission
+grader-java/src/main/java/com/trs/grader/GraderController.java
         |
         v
-backend/app/services/recommendation_service.py
+grader-java/src/main/java/com/trs/grader/GraderService.java
+        |
+        | tra ve scores, failed_outputs
+        v
+backend-java luu Submission
         |
         v
-backend/app/services/recommendation_engine.py
+backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
 ```
 
-Nếu chỉ đọc một luồng trước khi báo cáo hoặc debug, hãy đọc luồng này.
+Neu chi doc mot luong truoc khi bao cao hoac debug, hay doc luong nay.
 
 ## Recommendation
 
-File cần đọc:
+File can doc:
 
 ```text
-backend/app/services/recommendation_service.py
-backend/app/services/recommendation_engine.py
-backend/app/models/matrix_factorization.py
-backend/app/files/input/A2_group_std.npz
-backend/app/files/matries/*.npz
+backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
+backend-java/src/main/java/com/trs/backend/model/Recommendation.java
+backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java
 ```
 
-Ý tưởng hiện tại:
+Y tuong hien tai:
 
-- Lấy danh sách testcase fail của submission.
-- Xác định nhóm sinh viên: `apr1`, `apr2`, `apr3`, hoặc `unknown`.
-- Mỗi nhóm ứng với một model: `RSVD`, `timeSVD`, `LSTM`.
-- Load matrix prediction tương ứng.
-- Xếp hạng các testcase fail theo điểm dự đoán.
-- Gợi ý tối đa 3 testcase có điểm cao nhất.
+- Lay danh sach testcase fail cua submission.
+- Neu sinh vien chua sua testcase goi y lan truoc thi tiep tuc tra lai goi y cu.
+- Neu da qua gioi han trong ngay thi tra ve `DAILY_LIMIT_REACHED`.
+- Neu co testcase fail moi thi chon toi da 3 testcase fail dau tien.
+- Danh dau `Fallback (Simple Java)` vi pipeline train RSVD/NumPy cu chua duoc port sang Java.
 
 ## Grader
 
-File cần đọc:
+File can doc:
 
 ```text
-grader/main.py
-grader/support-files/
-grader/expected_outputs/
+grader-java/src/main/java/com/trs/grader/GraderController.java
+grader-java/src/main/java/com/trs/grader/GraderService.java
+grader-java/assets/support-files/
+grader-java/assets/expected_outputs/
 ```
 
-Grader làm các việc chính:
+Grader lam cac viec chinh:
 
-- Nhận code sinh viên.
-- Ghép với file hỗ trợ chính thức.
-- Compile bằng `g++`.
-- Chạy bộ testcase.
-- So sánh output thực tế với expected output.
-- Trả về pass/fail và lỗi cho backend.
+- Nhan code sinh vien.
+- Ghep voi file ho tro chinh thuc.
+- Compile bang `g++`.
+- Chay bo testcase.
+- So sanh output thuc te voi expected output.
+- Tra ve pass/fail va loi cho backend.
 
 ## Database
 
-Model nằm trong:
+Entity nam trong:
 
 ```text
-backend/app/models/
+backend-java/src/main/java/com/trs/backend/model/
 ```
 
-Bảng chính:
+Repository nam trong:
+
+```text
+backend-java/src/main/java/com/trs/backend/repository/
+```
+
+Bang chinh:
 
 - `accounts`
 - `students`
@@ -156,23 +163,22 @@ Bảng chính:
 - `submissions`
 - `recommendations`
 - `feedback_forms`
-- `matrix_factorizations`
 
-## Thứ Tự Đọc Code
+## Thu Tu Doc Code
 
 1. `frontend/src/app/student/page.tsx`
-2. `backend/app/routes/submission.py`
-3. `grader/main.py`
-4. `backend/app/models/submission.py`
-5. `backend/app/services/recommendation_service.py`
-6. `backend/app/services/recommendation_engine.py`
+2. `backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java`
+3. `backend-java/src/main/java/com/trs/backend/service/SubmissionService.java`
+4. `grader-java/src/main/java/com/trs/grader/GraderService.java`
+5. `backend-java/src/main/java/com/trs/backend/model/Submission.java`
+6. `backend-java/src/main/java/com/trs/backend/service/RecommendationService.java`
 7. `frontend/src/app/teacher/page.tsx`
-8. Các model còn lại trong `backend/app/models/`
+8. Cac entity con lai trong `backend-java/src/main/java/com/trs/backend/model/`
 
-## Ghi Chú Hiện Trạng
+## Ghi Chu Hien Trang
 
-- Auth hiện là dev-auth đơn giản, chưa phải OAuth thật.
-- Frontend page student/teacher còn lớn, sau này nên tách component/hook.
-- `project/archive/` chỉ để tham khảo source gốc, không phải code đang chạy.
-- `project/examples/` chứa dữ liệu mẫu để demo.
-- `project/docs/trs_flow_visualization.html` là visualization phụ, không phải runtime dependency.
+- Auth hien la dev-auth don gian, chua phai OAuth that.
+- Frontend page student/teacher con lon, sau nay nen tach component/hook.
+- Java backend va Java grader la source dang chay chinh.
+- `project/backups/` chi de backup local, khong phai code dang chay.
+- `project/docs/trs_flow_visualization.html` la visualization phu, khong phai runtime dependency.

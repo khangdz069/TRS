@@ -96,7 +96,7 @@ public class SubmissionService {
             try {
                 content = Files.readString(Path.of(path), StandardCharsets.UTF_8);
             } catch (IOException ignored) {
-                // Keep content empty, matching the permissive Python backend behavior.
+                // Keep content empty so a missing optional upload does not stop grading.
             }
             return new GraderPayloadFile(filename, path, content);
         }).toList();

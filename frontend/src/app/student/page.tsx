@@ -182,9 +182,9 @@ export default function StudentDashboard() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   
   // Code Editor states
-  const [editorFile, setEditorFile] = useState("solution.py");
+  const [editorFile, setEditorFile] = useState("solution.cpp");
   const [editorContent, setEditorContent] = useState(
-    '# Viết mã nguồn giải bài tập của bạn ở đây...\ndef solve():\n    pass\n'
+    '#include "kNN.hpp"\n\n// Viết mã nguồn giải bài tập C++ của bạn ở đây.\n'
   );
   
   // Drag & Drop States
@@ -714,7 +714,7 @@ export default function StudentDashboard() {
                 <div className="tech-panel" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
                   <h3 className="tech-panel-title">Phương án 1: Trình soạn thảo mã</h3>
                   <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label className="form-label">Tên tệp tin (ví dụ: main.py, solution.cpp)</label>
+                    <label className="form-label">Tên tệp tin (ví dụ: solution.cpp, kNN.cpp)</label>
                     <input
                       type="text"
                       className="form-control"
@@ -741,7 +741,7 @@ export default function StudentDashboard() {
                   </button>
                 </div>
 
-                {/* Method 2: Drag & Drop solution.py file */}
+                {/* Method 2: Drag & Drop C++ source files */}
                 <div className="tech-panel" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
                   <h3 className="tech-panel-title">Phương án 2: Kéo & thả file mã nguồn</h3>
                   
@@ -768,7 +768,7 @@ export default function StudentDashboard() {
                     <input
                       type="file"
                       multiple
-                      accept=".py,.cpp,.c,.h,.hpp,.zip"
+                      accept=".cpp,.c,.h,.hpp,.zip"
                       ref={fileInputRef}
                       onChange={handleFileChange}
                       style={{ display: "none" }}

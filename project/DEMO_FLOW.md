@@ -1,28 +1,25 @@
-# Luồng Demo Với Thầy
+# Luong Demo Voi Thay
 
-Mục tiêu demo: cho thầy thấy đây là một hệ thống phần mềm hoàn chỉnh, nhưng điểm NCKH nằm ở phần gợi ý testcase sau khi chấm bài.
+Muc tieu demo: cho thay day la he thong web hoan chinh gom frontend, backend Java, grader Java, database va recommendation service.
 
-## 0. Chuẩn Bị Trước Khi Demo
+## 0. Chuan Bi Truoc Khi Demo
 
-Chạy hệ thống:
+Chay he thong:
 
 ```bash
-docker compose -f project/docker-compose.yml up -d --build
+docker compose -p trs-rebuild -f project/docker-compose.yml up -d --build
 ```
 
-Mở app:
+Mo app:
 
 ```text
-http://localhost:3100
+http://localhost:3100/login
 ```
 
-File mẫu cần dùng:
+File mau can dung:
 
 ```text
 project/examples/danh_sach_sinh_vien_mau.csv
-project/examples/demo_submissions/01_lan_1_co_sai_nhan_goi_y_moi.zip
-project/examples/demo_submissions/02_lan_2_fix_goi_y_moi_con_sai_tc_khac.zip
-project/examples/demo_submissions/03_lan_3_dung_het.zip
 ```
 
 Email demo:
@@ -32,269 +29,187 @@ Teacher: teacher@hust.edu.vn
 Student: nam.tv20231234@sis.hust.edu.vn
 ```
 
-Ghi chú: sinh viên demo nên là `nam.tv20231234@sis.hust.edu.vn` vì file CSV mẫu có MSSV `20231234`.
+Ghi chu: neu can demo nop bai, co the dung editor tren web de nhap code C++ hoac upload cac file `.cpp`, `.hpp`, `.h`, `.c`, `.zip`.
 
-## 1. Mở Đầu Khi Nói Với Thầy
+## 1. Mo Dau Khi Noi Voi Thay
 
-Nói ngắn:
+Noi ngan:
 
 ```text
-Em demo project theo luồng người dùng. Project gồm frontend, backend, grader và recommendation engine.
-Điểm phần mềm là sinh viên nộp bài và hệ thống chấm tự động.
-Điểm NCKH là sau khi có các testcase sai, hệ thống chọn một số testcase nên gợi ý cho sinh viên.
+Em demo project theo luong nguoi dung. Project gom frontend, backend Java, grader Java va recommendation service.
+Diem phan mem la sinh vien nop bai va he thong cham tu dong.
+Diem nghien cuu la sau khi co cac testcase sai, he thong chon mot so testcase nen goi y cho sinh vien.
 ```
 
-## 2. Luồng Teacher
+## 2. Luong Teacher
 
-### Bước 1: Login Teacher
+### Buoc 1: Login Teacher
 
-Thao tác:
+Thao tac:
 
 ```text
-Mở /login
-Nhập teacher@hust.edu.vn
-Bấm đăng nhập với vai trò Teacher
+Mo /login
+Nhap teacher@hust.edu.vn
+Bam dang nhap voi vai tro Teacher
 ```
 
-Nói với thầy:
+Noi voi thay:
 
 ```text
-Đây là dev-auth để demo. Email đuôi @hust.edu.vn được xem là giảng viên.
+Day la dev-auth de demo. Email duoi @hust.edu.vn duoc xem la giang vien.
 ```
 
-### Bước 2: Tạo Assignment
+### Buoc 2: Tao Assignment
 
-Thao tác:
+Thao tac:
 
 ```text
-Vào tab bài tập
-Tạo assignment mới
-Tên gợi ý: Demo A1 - Testcase Recommendation
-Ngày bắt đầu: hôm nay
-Ngày kết thúc: chọn ngày sau hôm nay
-Mô tả: Nộp bài C++ kNN, hệ thống chấm và gợi ý testcase.
+Vao tab bai tap
+Tao assignment moi
+Ten goi y: Demo A1 - Testcase Recommendation
+Ngay bat dau: hom nay
+Ngay ket thuc: chon ngay sau hom nay
+Mo ta: Nop bai C++ kNN, he thong cham va goi y testcase.
 ```
 
-Nói với thầy:
+### Buoc 3: Import Sinh Vien
+
+Thao tac:
 
 ```text
-Giảng viên tạo bài tập để sinh viên có thể nộp bài vào đúng assignment.
-```
-
-### Bước 3: Import Sinh Viên
-
-Thao tác:
-
-```text
-Vào tab đăng ký sinh viên CSV
-Chọn assignment vừa tạo
+Vao tab dang ky sinh vien CSV
+Chon assignment vua tao
 Upload project/examples/danh_sach_sinh_vien_mau.csv
-Kiểm tra danh sách sinh viên đã được import
+Kiem tra danh sach sinh vien da duoc import
 ```
 
-Nói với thầy:
+Noi voi thay:
 
 ```text
-Giảng viên import danh sách lớp. Backend tạo account sinh viên và liên kết sinh viên với assignment.
+Backend Java tao account sinh vien va lien ket sinh vien voi assignment.
 ```
 
-## 3. Luồng Student Nộp Bài
+## 3. Luong Student Nop Bai
 
-### Bước 4: Login Student
+### Buoc 4: Login Student
 
-Thao tác:
+Thao tac:
 
 ```text
 Logout teacher
-Login student bằng nam.tv20231234@sis.hust.edu.vn
-Vào trang Student
-Kiểm tra thấy assignment vừa tạo
+Login student bang nam.tv20231234@sis.hust.edu.vn
+Kiem tra thay assignment vua tao
 ```
 
-Nói với thầy:
+### Buoc 5: Nop Bai
+
+Thao tac:
 
 ```text
-Sinh viên chỉ thấy những assignment mà mình được đăng ký.
+Chon assignment
+Vao tab nop bai
+Nhap code C++ trong editor hoac upload file C++/zip
+Bam nop bai
+Chuyen sang tab lich su
+Doi trang thai cham xong
 ```
 
-### Bước 5: Nộp Lần 1
-
-Thao tác:
+Noi voi thay:
 
 ```text
-Chọn assignment
-Vào tab nộp bài
-Upload project/examples/demo_submissions/01_lan_1_co_sai_nhan_goi_y_moi.zip
-Bấm nộp file
-Chuyển sang tab lịch sử
-Đợi trạng thái chấm xong
+Backend Java nhan file, luu submission, roi gui code sang grader Java.
+Grader Java compile C++ bang g++, chay bo testcase, sau do tra ve pass/fail cho backend.
 ```
 
-Nói với thầy:
-
-```text
-Backend nhận file, gửi sang grader. Grader compile C++ và chạy bộ testcase.
-Sau khi có danh sách testcase sai, backend gọi recommendation engine để chọn testcase gợi ý.
-```
-
-Điểm cần chỉ trên màn hình:
+Diem can chi tren man hinh:
 
 ```text
 Submission status
-Danh sách testcase pass/fail
-Khu vực recommendation
+Danh sach testcase pass/fail
+Khu vuc recommendation
 ```
 
-## 4. Giải Thích Recommendation
+## 4. Giai Thich Recommendation
 
-Khi recommendation hiện ra, nói:
+Khi recommendation hien ra, noi:
 
 ```text
-Hệ thống không đưa toàn bộ testcase sai cho sinh viên.
-Nó lấy danh sách testcase fail, xác định nhóm người học, chọn một model phù hợp,
-rồi xếp hạng các testcase fail theo điểm dự đoán.
-Cuối cùng chỉ lấy tối đa 3 testcase để gợi ý.
+He thong khong dua toan bo testcase sai cho sinh vien.
+Ban Java hien tai lay danh sach testcase fail, kiem tra cac rule nghiep vu,
+roi chon toi da 3 testcase fail dau tien de goi y.
 ```
 
-Nói đúng về 3 model:
+Noi ro trang thai model:
 
 ```text
-Hệ thống không chạy cả 3 model mỗi lần submit.
-Nó chọn một model theo nhóm sinh viên:
-apr1 dùng RSVD, apr2 dùng timeSVD, apr3 dùng LSTM.
-Nếu không xác định được nhóm thì fallback về RSVD.
+Pipeline train RSVD/NumPy cua ban cu chua duoc port sang Java.
+Vi vay ban Java hien tai dang dung fallback don gian de dam bao luong demo chay on dinh.
 ```
 
-Nếu thầy hỏi model có train lúc demo không:
+## 5. Feedback Va Analytics
+
+### Buoc 6: Student Gui Feedback
+
+Thao tac:
 
 ```text
-Không ạ. Trong bản demo này, các model đã có sẵn dưới dạng file matrix .npz.
-Runtime chỉ load prediction matrix để xếp hạng testcase fail.
+O recommendation, chon rating
+Nhap phan hoi: Goi y giup em tap trung sua dung loi hon.
+Bam gui feedback
 ```
 
-## 5. Luồng Sửa Bài Qua Nhiều Lần Nộp
+### Buoc 7: Teacher Xem Analytics
 
-### Bước 6: Nộp Lần 2
-
-Thao tác:
-
-```text
-Vào tab nộp bài
-Upload project/examples/demo_submissions/02_lan_2_fix_goi_y_moi_con_sai_tc_khac.zip
-Bấm nộp
-Vào lịch sử xem submission mới
-```
-
-Nói với thầy:
-
-```text
-Lần nộp thứ hai mô phỏng sinh viên đã sửa một phần sau khi xem gợi ý.
-Nếu vẫn còn testcase sai, hệ thống tiếp tục sinh recommendation mới hoặc nhắc các testcase gợi ý cũ chưa hoàn thành.
-```
-
-### Bước 7: Nộp Lần 3
-
-Thao tác:
-
-```text
-Upload project/examples/demo_submissions/03_lan_3_dung_het.zip
-Xem kết quả pass tốt hơn hoặc hết lỗi tùy bộ chấm
-```
-
-Nói với thầy:
-
-```text
-Luồng này minh họa vòng lặp học tập: nộp bài, nhận gợi ý, sửa bài, nộp lại.
-```
-
-## 6. Feedback Và Analytics
-
-### Bước 8: Student Gửi Feedback
-
-Thao tác:
-
-```text
-Ở recommendation, chọn rating
-Nhập phản hồi: Gợi ý giúp em tập trung sửa đúng lỗi hơn.
-Bấm gửi feedback
-```
-
-Nói với thầy:
-
-```text
-Feedback là dữ liệu để đánh giá gợi ý testcase có hữu ích với sinh viên hay không.
-```
-
-### Bước 9: Teacher Xem Analytics
-
-Thao tác:
+Thao tac:
 
 ```text
 Logout student
-Login lại teacher
-Vào tab analytics
-Chọn assignment demo
-Xem rating, testcase stats, feedback gần đây
+Login lai teacher
+Vao tab analytics
+Chon assignment demo
+Xem rating, testcase stats, feedback gan day
 ```
 
-Nói với thầy:
+## 6. Tom Tat Kien Truc Bang Mot Cau
+
+Noi:
 
 ```text
-Giảng viên có thể xem phản hồi và thống kê để đánh giá chất lượng recommendation.
+Frontend phuc vu thao tac nguoi dung, backend Java dieu phoi du lieu,
+grader Java cham code C++, con recommendation service chon testcase sai de goi y cho sinh vien.
 ```
 
-## 7. Tóm Tắt Kiến Trúc Bằng Một Câu
+## 7. Neu Demo Bi Loi Thi Noi Gi?
 
-Nói:
+Neu Docker chua chay:
 
 ```text
-Frontend phục vụ thao tác người dùng, backend điều phối dữ liệu,
-grader chịu trách nhiệm chấm code C++, còn recommendation engine là phần lõi nghiên cứu
-để chọn testcase sai phù hợp nhất cho sinh viên.
+Em se chay lai Docker Compose va kiem tra health check cua backend Java, grader Java.
 ```
 
-## 8. Nếu Demo Bị Lỗi Thì Nói Gì?
-
-Nếu Docker chưa chạy:
+Neu grader lau:
 
 ```text
-Em sẽ chuyển sang giải thích flow bằng visualization trước, vì hệ thống chạy theo kiến trúc này.
+Grader dang compile va chay nhieu testcase C++, nen phan cham co the mat mot chut thoi gian.
 ```
 
-Nếu grader lâu:
+Neu recommendation khong hien:
 
 ```text
-Grader đang compile và chạy nhiều testcase C++, nên phần chấm có thể mất một chút thời gian.
-Trong lúc chờ, em giải thích backend sẽ lưu submission và sinh recommendation sau khi grader trả kết quả.
+Recommendation phu thuoc vao ket qua cham. Neu bai nop khong co testcase fail thi he thong se bao khong co testcase can goi y.
 ```
 
-Nếu recommendation không hiện:
+## 8. Checklist Demo Nhanh
 
 ```text
-Recommendation phụ thuộc vào kết quả chấm và dữ liệu matrix.
-Nếu model/matrix không match sinh viên, hệ thống có fallback để vẫn chọn các testcase fail đầu tiên.
-```
-
-Nếu thầy hỏi vì sao đây là NCKH:
-
-```text
-Nếu chỉ chấm đúng sai thì đây là hệ thống phần mềm bình thường.
-Điểm nghiên cứu là bài toán chọn testcase nào nên gợi ý,
-dựa trên learner group và prediction matrix thay vì chọn ngẫu nhiên hoặc đưa hết lỗi cho sinh viên.
-```
-
-## 9. Checklist Demo Nhanh
-
-```text
-[ ] Chạy Docker
-[ ] Mở http://localhost:3100
+[ ] Chay Docker
+[ ] Mo http://localhost:3100/login
 [ ] Login teacher
-[ ] Tạo assignment
-[ ] Import CSV sinh viên
+[ ] Tao assignment
+[ ] Import CSV sinh vien
 [ ] Login student
-[ ] Nộp demo zip lần 1
-[ ] Xem kết quả chấm và recommendation
-[ ] Nộp demo zip lần 2
-[ ] Gửi feedback
+[ ] Nop bai C++ hoac zip
+[ ] Xem ket qua cham va recommendation
+[ ] Gui feedback
 [ ] Login teacher xem analytics
 ```

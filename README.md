@@ -142,14 +142,12 @@ Open a pull request on GitHub before merging to `main`.
 ```text
 frontend/      Next.js UI
 backend-java/  Spring Boot backend API
-grader-java/   Spring Boot C++ grader
-backend/       Old Python backend kept as reference
-grader/        Old Python grader assets and expected outputs
+grader-java/   Spring Boot C++ grader and testcase assets
 project/       Docker Compose and local backups
 ```
 
 ## Known Limitations
 
-- The original Python RSVD/NumPy recommendation model has not been fully ported to Java yet.
+- The original RSVD/NumPy training pipeline has not been fully ported to Java yet.
 - The Java backend currently uses a simple fallback recommendation strategy.
-- Keep the old Python folders until the Java version has been fully accepted by the team.
+- Local backups are stored under `project/backups/`, which is ignored by Git.

@@ -340,7 +340,7 @@
         <span class="tag">Backend</span>
         <span class="tag">Grader</span>
         <span class="tag">Recommendation</span>
-        <span class="tag">RSVD / timeSVD / LSTM</span>
+        <span class="tag">Simple Java fallback</span>
       </div>
     </div>
   </header>
@@ -435,7 +435,7 @@
     </section>
 
     <section class="panel">
-      <h2>4. RSVD, timeSVD, LSTM chạy thế nào?</h2>
+      <h2>4. Recommendation Java chạy thế nào?</h2>
       <p>
         Mỗi lần sinh viên nộp bài, hệ thống không chạy cả 3 mô hình.
         Nó xác định sinh viên thuộc nhóm nào rồi chọn một mô hình tương ứng.
@@ -472,8 +472,8 @@
         </tbody>
       </table>
       <p style="margin-top: 12px; margin-bottom: 0;">
-        Các model đã có sẵn dưới dạng file <code>.npz</code>. Project hiện tại chủ yếu load matrix dự đoán,
-        không training lại model khi người dùng bấm nộp bài.
+        Bản Java hiện tại dùng fallback đơn giản: lấy testcase fail, áp dụng rule nghiệp vụ,
+        rồi chọn tối đa 3 testcase fail đầu tiên.
       </p>
     </section>
 
@@ -487,18 +487,18 @@
         </div>
         <div class="step">
           <div class="number">2</div>
-          <strong>Xác định nhóm</strong>
-          <span>Nhóm là apr1, apr2, apr3 hoặc unknown.</span>
+          <strong>Kiểm tra rule</strong>
+          <span>Kiểm tra testcase cũ, daily limit và trạng thái submission.</span>
         </div>
         <div class="step">
           <div class="number">3</div>
-          <strong>Chọn model</strong>
-          <span>Map nhóm sang RSVD, timeSVD hoặc LSTM.</span>
+          <strong>Chọn fallback</strong>
+          <span>Dùng logic Java đơn giản, không gọi pipeline cũ.</span>
         </div>
         <div class="step">
           <div class="number">4</div>
-          <strong>Load score</strong>
-          <span>Lấy điểm dự đoán từ matrix.</span>
+          <strong>Lấy top testcase</strong>
+          <span>Chọn tối đa 3 testcase fail đầu tiên.</span>
         </div>
         <div class="step">
           <div class="number">5</div>
@@ -536,23 +536,23 @@
           </tr>
           <tr>
             <td>Backend nhận submission</td>
-            <td><code>backend/app/routes/submission.py</code></td>
+            <td><code>backend-java/src/main/java/com/trs/backend/controller/SubmissionController.java</code></td>
             <td>Nhận bài nộp, gọi grader, lưu kết quả.</td>
           </tr>
           <tr>
             <td>Máy chấm</td>
-            <td><code>grader/main.py</code></td>
+            <td><code>grader-java/src/main/java/com/trs/grader/GraderService.java</code></td>
             <td>Compile C++, chạy testcase, trả về pass/fail.</td>
           </tr>
           <tr>
             <td>Logic gợi ý</td>
-            <td><code>backend/app/services/recommendation_service.py</code></td>
+            <td><code>backend-java/src/main/java/com/trs/backend/service/RecommendationService.java</code></td>
             <td>Chọn nhóm, chọn model, lấy top 3 testcase.</td>
           </tr>
           <tr>
             <td>Load matrix model</td>
-            <td><code>backend/app/services/recommendation_engine.py</code></td>
-            <td>Load file .npz và lấy điểm dự đoán.</td>
+            <td><code>backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java</code></td>
+            <td>Lưu và truy vấn recommendation trong database.</td>
           </tr>
         </tbody>
       </table>
@@ -564,7 +564,7 @@
         Project này có thể xem là một hệ thống phần mềm web bình thường ở phần giao diện,
         backend, database và grader. Tuy nhiên điểm nghiên cứu nằm ở recommendation engine:
         sau khi sinh viên nộp bài và có danh sách testcase sai, hệ thống dùng nhóm người học
-        và matrix dự đoán từ RSVD, timeSVD hoặc LSTM để chọn tối đa 3 testcase phù hợp nhất
+        và fallback Java để chọn tối đa 3 testcase phù hợp nhất
         nhằm hỗ trợ sinh viên sửa bài.
       </div>
     </section>
@@ -574,7 +574,7 @@
         <h3>Nên nói</h3>
         <ul>
           <li>Hệ thống chọn một model theo nhóm sinh viên.</li>
-          <li>Model đã có matrix dự đoán sẵn trong file .npz.</li>
+          <li>Bản Java hiện tại dùng fallback đơn giản, không phụ thuộc file matrix.</li>
           <li>Recommendation chỉ xếp hạng các testcase đang fail.</li>
           <li>Mục tiêu là gợi ý testcase có ích, không đưa hết lỗi ra cùng lúc.</li>
         </ul>
@@ -583,7 +583,7 @@
         <h3>Không nên nói</h3>
         <ul>
           <li>Hệ thống chạy cả 3 model mỗi lần sinh viên nộp bài.</li>
-          <li>Project training LSTM/RSVD/timeSVD trực tiếp lúc submit.</li>
+          <li>Project training model nâng cao trực tiếp lúc submit.</li>
           <li>Recommendation chọn testcase ngẫu nhiên.</li>
           <li>Đây chỉ là phần mềm CRUD bình thường.</li>
         </ul>

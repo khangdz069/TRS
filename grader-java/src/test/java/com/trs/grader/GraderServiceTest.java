@@ -13,7 +13,7 @@ class GraderServiceTest {
     }
 
     @Test
-    void normalizeOutputTrimsOuterWhitespaceLikePythonVersion() {
+    void normalizeOutputTrimsOuterWhitespace() {
         String input = "  answer\n";
 
         assertEquals("answer", GraderService.normalizeOutput(input));

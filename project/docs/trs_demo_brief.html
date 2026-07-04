@@ -340,9 +340,9 @@
     </section>
 
     <section>
-      <h2>5. RSVD, timeSVD, LSTM dùng như thế nào?</h2>
+      <h2>5. Recommendation Java dùng như thế nào?</h2>
       <p>
-        Hệ thống không chạy cả 3 model trong mỗi lần submit. Nó xác định nhóm sinh viên rồi chọn một model tương ứng.
+        Bản Java hiện tại dùng fallback đơn giản: lấy testcase fail, kiểm tra rule nghiệp vụ, rồi chọn tối đa 3 testcase fail đầu tiên.
       </p>
       <table>
         <thead>
@@ -356,22 +356,22 @@
           <tr>
             <td><code>apr1</code></td>
             <td><span class="model-rsvd">RSVD</span></td>
-            <td>Dùng matrix RSVD để xếp hạng testcase fail.</td>
+            <td>Pipeline cũ chưa được port sang Java.</td>
           </tr>
           <tr>
             <td><code>apr2</code></td>
             <td><span class="model-timesvd">timeSVD</span></td>
-            <td>Dùng matrix timeSVD cho nhóm sinh viên này.</td>
+            <td>Pipeline cũ chưa được port sang Java.</td>
           </tr>
           <tr>
             <td><code>apr3</code></td>
             <td><span class="model-lstm">LSTM</span></td>
-            <td>Dùng matrix LSTM cho nhóm sinh viên này.</td>
+            <td>Pipeline cũ chưa được port sang Java.</td>
           </tr>
           <tr>
             <td><code>unknown</code></td>
             <td><span class="model-rsvd">RSVD</span></td>
-            <td>Không xác định được nhóm thì fallback về RSVD.</td>
+            <td>Bản Java dùng fallback đơn giản để vẫn có gợi ý ổn định.</td>
           </tr>
         </tbody>
       </table>

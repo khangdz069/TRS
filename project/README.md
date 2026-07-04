@@ -1,62 +1,54 @@
-# TRS Rebuild
+# TRS Rebuild Project Notes
 
-TRS Rebuild là prototype cho hệ thống nộp bài, chấm code C++ và gợi ý testcase học tập.
+TRS Rebuild la prototype cho he thong nop bai, cham code C++ va goi y testcase hoc tap.
 
-## Cấu Trúc Gọn
+## Cau Truc Gon
 
 ```text
 trs-rebuild/
-  backend/   Flask API chính, port 5102
-  frontend/  Next.js + TypeScript, port 3100
-  grader/    Flask grader chấm C++, port 5103
-  project/   Tài liệu, dữ liệu mẫu, script, archive và Docker Compose
+  frontend/      Next.js + TypeScript, port 3100
+  backend-java/  Spring Boot backend API, port 5102
+  grader-java/   Spring Boot C++ grader, port 5103
+  project/       Docker Compose, tai lieu, du lieu mau va backup local
 ```
 
 Trong `project/`:
 
 ```text
-archive/            Source gốc và file zip tham khảo
-docs/               Tài liệu phụ và visualization
-examples/           CSV mẫu và submission demo
-tools/              Script tiện ích
-docker-compose.yml  Cấu hình chạy toàn bộ hệ thống
-PROJECT_MAP.md      Bản đồ project
-LEARNING_PATH.md    Lộ trình đọc code
-DEMO_FLOW.md        Kịch bản demo với thầy
+backups/            Backup local, khong commit len Git
+docs/               Tai lieu phu va visualization
+examples/           CSV mau
+docker-compose.yml  Cau hinh chay toan bo he thong
+PROJECT_MAP.md      Ban do project
+LEARNING_PATH.md    Lo trinh doc code Java
+DEMO_FLOW.md        Kich ban demo voi thay
 ```
 
-## Cổng Dịch Vụ
+## Cong Dich Vu
 
-| Dịch vụ | Port ngoài | Ghi chú |
+| Dich vu | Port ngoai | Ghi chu |
 | --- | ---: | --- |
 | Frontend | `3100` | `http://localhost:3100` |
-| Backend | `5102` | `http://localhost:5102/api/health` |
-| Grader | `5103` | `http://localhost:5103/api/health` |
+| Backend Java | `5102` | `http://localhost:5102/api/health` |
+| Grader Java | `5103` | `http://localhost:5103/api/health` |
 | PostgreSQL | `55432` | Database `trs_db` |
 
-## Chạy Bằng Docker Compose
+## Chay Bang Docker Compose
 
-Từ thư mục root `trs-rebuild`:
-
-```bash
-docker compose -f project/docker-compose.yml up -d --build
-docker compose -f project/docker-compose.yml ps
-```
-
-Tắt toàn bộ dịch vụ:
+Tu thu muc root `trs-rebuild`:
 
 ```bash
-docker compose -f project/docker-compose.yml down
+docker compose -p trs-rebuild -f project/docker-compose.yml up -d --build
+docker compose -p trs-rebuild -f project/docker-compose.yml ps
 ```
 
-Hoặc vào thẳng thư mục `project` rồi chạy:
+Tat toan bo dich vu:
 
 ```bash
-cd project
-docker compose up -d --build
+docker compose -p trs-rebuild -f project/docker-compose.yml down
 ```
 
-## Chạy Local Từng Phần
+## Chay Local Tung Phan
 
 Frontend:
 
@@ -66,28 +58,24 @@ npm install
 npm run dev
 ```
 
-Backend:
+Backend Java:
 
 ```bash
-cd backend
-pip install -r requirements.txt
-python main.py
+cd backend-java
+mvn spring-boot:run
 ```
 
-Grader:
+Grader Java:
 
 ```bash
-cd grader
-pip install -r requirements.txt
-python main.py
+cd grader-java
+mvn spring-boot:run
 ```
 
-## Dữ Liệu Mẫu
+## Du Lieu Mau
 
-- CSV sinh viên mẫu: `project/examples/danh_sach_sinh_vien_mau.csv`
-- Submission demo: `project/examples/demo_submissions/`
-- Tạo lại submission demo: `python project/tools/create_demo_submissions.py`
+- CSV sinh vien mau: `project/examples/danh_sach_sinh_vien_mau.csv`
 - Flow visualization: `project/docs/trs_flow_visualization.html`
-- Kịch bản demo: `project/DEMO_FLOW.md`
-- Bản tóm tắt gửi nhóm/thầy: `project/docs/TRS_REBUILD_DEMO_BRIEF.md`
-- Bản HTML mở trình bày nhanh: `project/docs/trs_demo_brief.html`
+- Kich ban demo: `project/DEMO_FLOW.md`
+- Ban tom tat gui nhom/thay: `project/docs/TRS_REBUILD_DEMO_BRIEF.md`
+- Ban HTML mo trinh bay nhanh: `project/docs/trs_demo_brief.html`

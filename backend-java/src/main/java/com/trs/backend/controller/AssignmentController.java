@@ -154,7 +154,7 @@ public class AssignmentController {
     @PostMapping("/{id}/models/rsvd/rebuild")
     public ResponseEntity<?> rebuildRsvdModel(@PathVariable String id) {
         return ResponseEntity.status(501).body(Map.of(
-                "error", "RSVD rebuild is still served by the Python backend and has not been converted yet.",
+                "error", "RSVD rebuild is not supported in the Java backend yet.",
                 "assignment_id", id
         ));
     }

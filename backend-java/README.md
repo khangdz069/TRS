@@ -1,6 +1,6 @@
 # TRS Backend Java
 
-Spring Boot replacement for the original Flask backend in `backend/`.
+Spring Boot backend API for TRS.
 
 ## Run locally
 
@@ -35,4 +35,4 @@ docker build -f backend-java/Dockerfile .
 
 The main REST API has been ported for the current frontend workflow: auth, assignments, student import, submissions, recommendations, testcase details, and feedback forms.
 
-The old Python backend is still kept in `backend/` as a backup/reference. The RSVD model rebuild endpoint currently returns `501`; the Java recommendation service uses a simple fallback strategy until the original NumPy model pipeline is ported.
+The legacy backend has been moved out of the active source tree. The RSVD model rebuild endpoint currently returns `501`; the Java recommendation service uses a simple fallback strategy until the original NumPy model pipeline is ported.

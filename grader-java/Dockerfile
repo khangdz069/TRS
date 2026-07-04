@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY --from=build /workspace/grader-java/target/grader-java-0.0.1-SNAPSHOT.jar app.jar
-COPY grader/support-files ./support-files
-COPY grader/expected_outputs ./expected_outputs
+COPY grader-java/assets/support-files ./support-files
+COPY grader-java/assets/expected_outputs ./expected_outputs
 
 RUN mkdir -p /app/temp
 
