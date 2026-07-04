@@ -340,7 +340,7 @@
         <span class="tag">Backend</span>
         <span class="tag">Grader</span>
         <span class="tag">Recommendation</span>
-        <span class="tag">Simple Java fallback</span>
+        <span class="tag">Python model service</span>
       </div>
     </div>
   </header>
@@ -435,7 +435,7 @@
     </section>
 
     <section class="panel">
-      <h2>4. Recommendation Java chạy thế nào?</h2>
+      <h2>4. Model Python chạy thế nào?</h2>
       <p>
         Mỗi lần sinh viên nộp bài, hệ thống không chạy cả 3 mô hình.
         Nó xác định sinh viên thuộc nhóm nào rồi chọn một mô hình tương ứng.
@@ -472,8 +472,8 @@
         </tbody>
       </table>
       <p style="margin-top: 12px; margin-bottom: 0;">
-        Bản Java hiện tại dùng fallback đơn giản: lấy testcase fail, áp dụng rule nghiệp vụ,
-        rồi chọn tối đa 3 testcase fail đầu tiên.
+        Backend Java giữ các rule nghiệp vụ, sau đó gọi model Python để chọn group,
+        chọn RSVD/timeSVD/LSTM và rank testcase fail bằng matrix.
       </p>
     </section>
 
@@ -492,13 +492,13 @@
         </div>
         <div class="step">
           <div class="number">3</div>
-          <strong>Chọn fallback</strong>
-          <span>Dùng logic Java đơn giản, không gọi pipeline cũ.</span>
+          <strong>Gọi model</strong>
+          <span>Backend gọi model-python qua HTTP.</span>
         </div>
         <div class="step">
           <div class="number">4</div>
           <strong>Lấy top testcase</strong>
-          <span>Chọn tối đa 3 testcase fail đầu tiên.</span>
+          <span>Model trả tối đa 3 testcase fail có điểm cao.</span>
         </div>
         <div class="step">
           <div class="number">5</div>
@@ -551,8 +551,8 @@
           </tr>
           <tr>
             <td>Load matrix model</td>
-            <td><code>backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java</code></td>
-            <td>Lưu và truy vấn recommendation trong database.</td>
+            <td><code>model-python/app.py</code></td>
+            <td>Load matrix model và rank testcase fail.</td>
           </tr>
         </tbody>
       </table>
@@ -564,7 +564,7 @@
         Project này có thể xem là một hệ thống phần mềm web bình thường ở phần giao diện,
         backend, database và grader. Tuy nhiên điểm nghiên cứu nằm ở recommendation engine:
         sau khi sinh viên nộp bài và có danh sách testcase sai, hệ thống dùng nhóm người học
-        và fallback Java để chọn tối đa 3 testcase phù hợp nhất
+        và model Python để chọn tối đa 3 testcase phù hợp nhất
         nhằm hỗ trợ sinh viên sửa bài.
       </div>
     </section>
@@ -574,7 +574,7 @@
         <h3>Nên nói</h3>
         <ul>
           <li>Hệ thống chọn một model theo nhóm sinh viên.</li>
-          <li>Bản Java hiện tại dùng fallback đơn giản, không phụ thuộc file matrix.</li>
+          <li>Model Python load matrix dự đoán từ file .npz.</li>
           <li>Recommendation chỉ xếp hạng các testcase đang fail.</li>
           <li>Mục tiêu là gợi ý testcase có ích, không đưa hết lỗi ra cùng lúc.</li>
         </ul>

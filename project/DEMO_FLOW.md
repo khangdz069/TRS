@@ -1,6 +1,6 @@
 # Luong Demo Voi Thay
 
-Muc tieu demo: cho thay day la he thong web hoan chinh gom frontend, backend Java, grader Java, database va recommendation service.
+Muc tieu demo: cho thay day la he thong web hoan chinh gom frontend, backend Java, grader Java, model Python hop den, database va feedback analytics.
 
 ## 0. Chuan Bi Truoc Khi Demo
 
@@ -29,23 +29,21 @@ Teacher: teacher@hust.edu.vn
 Student: nam.tv20231234@sis.hust.edu.vn
 ```
 
-Ghi chu: neu can demo nop bai, co the dung editor tren web de nhap code C++ hoac upload cac file `.cpp`, `.hpp`, `.h`, `.c`, `.zip`.
+Neu can demo nop bai, co the dung editor tren web de nhap code C++ hoac upload cac file `.cpp`, `.hpp`, `.h`, `.c`, `.zip`.
 
 ## 1. Mo Dau Khi Noi Voi Thay
 
 Noi ngan:
 
 ```text
-Em demo project theo luong nguoi dung. Project gom frontend, backend Java, grader Java va recommendation service.
-Diem phan mem la sinh vien nop bai va he thong cham tu dong.
-Diem nghien cuu la sau khi co cac testcase sai, he thong chon mot so testcase nen goi y cho sinh vien.
+Em demo project theo luong nguoi dung. Project gom frontend, backend Java, grader Java va model Python.
+Backend va grader duoc viet bang Java Spring Boot. Rieng model recommendation duoc dong goi nhu mot Python service hop den vi phu thuoc NumPy va matrix file.
+Diem nghien cuu la sau khi co cac testcase sai, model rank va chon mot so testcase nen goi y cho sinh vien.
 ```
 
 ## 2. Luong Teacher
 
 ### Buoc 1: Login Teacher
-
-Thao tac:
 
 ```text
 Mo /login
@@ -53,15 +51,7 @@ Nhap teacher@hust.edu.vn
 Bam dang nhap voi vai tro Teacher
 ```
 
-Noi voi thay:
-
-```text
-Day la dev-auth de demo. Email duoi @hust.edu.vn duoc xem la giang vien.
-```
-
 ### Buoc 2: Tao Assignment
-
-Thao tac:
 
 ```text
 Vao tab bai tap
@@ -73,8 +63,6 @@ Mo ta: Nop bai C++ kNN, he thong cham va goi y testcase.
 ```
 
 ### Buoc 3: Import Sinh Vien
-
-Thao tac:
 
 ```text
 Vao tab dang ky sinh vien CSV
@@ -93,8 +81,6 @@ Backend Java tao account sinh vien va lien ket sinh vien voi assignment.
 
 ### Buoc 4: Login Student
 
-Thao tac:
-
 ```text
 Logout teacher
 Login student bang nam.tv20231234@sis.hust.edu.vn
@@ -102,8 +88,6 @@ Kiem tra thay assignment vua tao
 ```
 
 ### Buoc 5: Nop Bai
-
-Thao tac:
 
 ```text
 Chon assignment
@@ -119,14 +103,7 @@ Noi voi thay:
 ```text
 Backend Java nhan file, luu submission, roi gui code sang grader Java.
 Grader Java compile C++ bang g++, chay bo testcase, sau do tra ve pass/fail cho backend.
-```
-
-Diem can chi tren man hinh:
-
-```text
-Submission status
-Danh sach testcase pass/fail
-Khu vuc recommendation
+Backend Java lay danh sach testcase fail, kiem tra rule nghiep vu, roi goi model Python de rank testcase.
 ```
 
 ## 4. Giai Thich Recommendation
@@ -135,22 +112,21 @@ Khi recommendation hien ra, noi:
 
 ```text
 He thong khong dua toan bo testcase sai cho sinh vien.
-Ban Java hien tai lay danh sach testcase fail, kiem tra cac rule nghiep vu,
-roi chon toi da 3 testcase fail dau tien de goi y.
+Backend Java chi xu ly nghiep vu: no testcase, daily limit, testcase goi y lan truoc chua pass.
+Neu hop le, backend goi model-python. Model nay chon learner group, chon RSVD/timeSVD/LSTM va rank testcase fail bang matrix.
 ```
 
-Noi ro trang thai model:
+Noi ro ly do giu Python:
 
 ```text
-Pipeline train RSVD/NumPy cua ban cu chua duoc port sang Java.
-Vi vay ban Java hien tai dang dung fallback don gian de dam bao luong demo chay on dinh.
+Phan model duoc giu Python nhu hop den vi phu thuoc NumPy va cac file matrix .npz.
+Backend Java khong can biet cach model tinh diem; no chi gui failed_testcases va nhan recommended_testcases.
+Neu model service loi, Java backend co fallback don gian de demo khong bi dung.
 ```
 
 ## 5. Feedback Va Analytics
 
 ### Buoc 6: Student Gui Feedback
-
-Thao tac:
 
 ```text
 O recommendation, chon rating
@@ -159,8 +135,6 @@ Bam gui feedback
 ```
 
 ### Buoc 7: Teacher Xem Analytics
-
-Thao tac:
 
 ```text
 Logout student
@@ -172,11 +146,9 @@ Xem rating, testcase stats, feedback gan day
 
 ## 6. Tom Tat Kien Truc Bang Mot Cau
 
-Noi:
-
 ```text
 Frontend phuc vu thao tac nguoi dung, backend Java dieu phoi du lieu,
-grader Java cham code C++, con recommendation service chon testcase sai de goi y cho sinh vien.
+grader Java cham code C++, con model Python la hop den recommendation dung de rank testcase sai.
 ```
 
 ## 7. Neu Demo Bi Loi Thi Noi Gi?
@@ -184,7 +156,7 @@ grader Java cham code C++, con recommendation service chon testcase sai de goi y
 Neu Docker chua chay:
 
 ```text
-Em se chay lai Docker Compose va kiem tra health check cua backend Java, grader Java.
+Em se chay lai Docker Compose va kiem tra health check cua backend Java, grader Java va model Python.
 ```
 
 Neu grader lau:
@@ -197,6 +169,7 @@ Neu recommendation khong hien:
 
 ```text
 Recommendation phu thuoc vao ket qua cham. Neu bai nop khong co testcase fail thi he thong se bao khong co testcase can goi y.
+Neu model service loi, backend Java van co fallback de tra goi y don gian.
 ```
 
 ## 8. Checklist Demo Nhanh
@@ -204,6 +177,9 @@ Recommendation phu thuoc vao ket qua cham. Neu bai nop khong co testcase fail th
 ```text
 [ ] Chay Docker
 [ ] Mo http://localhost:3100/login
+[ ] Check backend http://localhost:5102/api/health
+[ ] Check grader http://localhost:5103/api/health
+[ ] Check model http://localhost:5104/api/health
 [ ] Login teacher
 [ ] Tao assignment
 [ ] Import CSV sinh vien

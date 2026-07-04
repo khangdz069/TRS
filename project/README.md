@@ -9,6 +9,7 @@ trs-rebuild/
   frontend/      Next.js + TypeScript, port 3100
   backend-java/  Spring Boot backend API, port 5102
   grader-java/   Spring Boot C++ grader, port 5103
+  model-python/  Python black-box model service, port 5104
   project/       Docker Compose, tai lieu, du lieu mau va backup local
 ```
 
@@ -31,6 +32,7 @@ DEMO_FLOW.md        Kich ban demo voi thay
 | Frontend | `3100` | `http://localhost:3100` |
 | Backend Java | `5102` | `http://localhost:5102/api/health` |
 | Grader Java | `5103` | `http://localhost:5103/api/health` |
+| Model Python | `5104` | `http://localhost:5104/api/health` |
 | PostgreSQL | `55432` | Database `trs_db` |
 
 ## Chay Bang Docker Compose
@@ -70,6 +72,14 @@ Grader Java:
 ```bash
 cd grader-java
 mvn spring-boot:run
+```
+
+Model Python:
+
+```bash
+cd model-python
+pip install -r requirements.txt
+python app.py
 ```
 
 ## Du Lieu Mau

@@ -1,6 +1,6 @@
 # TRS Rebuild
 
-TRS Rebuild is a Dockerized teaching support system for programming assignments. The current stack uses a Next.js frontend, a Java Spring Boot backend, a Java Spring Boot grader, and PostgreSQL.
+TRS Rebuild is a Dockerized teaching support system for programming assignments. The current stack uses a Next.js frontend, a Java Spring Boot backend, a Java Spring Boot grader, a Python black-box model service, and PostgreSQL.
 
 ## Services
 
@@ -9,6 +9,7 @@ TRS Rebuild is a Dockerized teaching support system for programming assignments.
 | Frontend | http://localhost:3100 | Next.js student/teacher portal |
 | Backend API | http://localhost:5102/api/health | Spring Boot backend |
 | Grader API | http://localhost:5103/api/health | Spring Boot C++ grader |
+| Model API | http://localhost:5104/api/health | Python recommendation model service |
 | PostgreSQL | localhost:55432 | Database `trs_db` |
 
 ## Run Locally
@@ -100,6 +101,14 @@ mvn test
 mvn spring-boot:run
 ```
 
+Model Python:
+
+```bash
+cd model-python
+pip install -r requirements.txt
+python app.py
+```
+
 Frontend:
 
 ```bash
@@ -143,11 +152,13 @@ Open a pull request on GitHub before merging to `main`.
 frontend/      Next.js UI
 backend-java/  Spring Boot backend API
 grader-java/   Spring Boot C++ grader and testcase assets
+model-python/  Python black-box recommendation model
 project/       Docker Compose and local backups
 ```
 
 ## Known Limitations
 
-- The original RSVD/NumPy training pipeline has not been fully ported to Java yet.
-- The Java backend currently uses a simple fallback recommendation strategy.
+- Model inference is intentionally kept as a Python black-box service because it depends on NumPy matrix files.
+- The Java backend falls back to a simple recommendation strategy if the model service is unavailable.
+- The RSVD rebuild/training endpoint still returns `501`; runtime recommendation uses the model service.
 - Local backups are stored under `project/backups/`, which is ignored by Git.

@@ -340,9 +340,9 @@
     </section>
 
     <section>
-      <h2>5. Recommendation Java dùng như thế nào?</h2>
+      <h2>5. Model Python dùng như thế nào?</h2>
       <p>
-        Bản Java hiện tại dùng fallback đơn giản: lấy testcase fail, kiểm tra rule nghiệp vụ, rồi chọn tối đa 3 testcase fail đầu tiên.
+        Backend Java kiểm tra rule nghiệp vụ, rồi gọi model Python để chọn group, chọn RSVD/timeSVD/LSTM và rank testcase fail.
       </p>
       <table>
         <thead>
@@ -356,22 +356,22 @@
           <tr>
             <td><code>apr1</code></td>
             <td><span class="model-rsvd">RSVD</span></td>
-            <td>Pipeline cũ chưa được port sang Java.</td>
+            <td>Dùng matrix RSVD để xếp hạng testcase fail.</td>
           </tr>
           <tr>
             <td><code>apr2</code></td>
             <td><span class="model-timesvd">timeSVD</span></td>
-            <td>Pipeline cũ chưa được port sang Java.</td>
+            <td>Dùng matrix timeSVD cho nhóm sinh viên này.</td>
           </tr>
           <tr>
             <td><code>apr3</code></td>
             <td><span class="model-lstm">LSTM</span></td>
-            <td>Pipeline cũ chưa được port sang Java.</td>
+            <td>Dùng matrix LSTM cho nhóm sinh viên này.</td>
           </tr>
           <tr>
             <td><code>unknown</code></td>
             <td><span class="model-rsvd">RSVD</span></td>
-            <td>Bản Java dùng fallback đơn giản để vẫn có gợi ý ổn định.</td>
+            <td>Không xác định được nhóm thì model service fallback về RSVD.</td>
           </tr>
         </tbody>
       </table>

@@ -33,12 +33,15 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - GRADER_URL=http://grader:5103/api/grader
+      - MODEL_URL=http://model:5104/api/model/recommend
       - JWT_SECRET=dev-secret-key-trs-rebuild
       - UPLOAD_DIR=/app/uploads
     depends_on:
       db:
         condition: service_healthy
       grader:
+        condition: service_started
+      model:
         condition: service_started
     volumes:
       - ../backend-java/uploads:/app/uploads
@@ -52,6 +55,16 @@ services:
     container_name: trs_grader
     ports:
       - "5103:5103"
+    restart: unless-stopped
+
+  # Model Service (Python black-box recommendation model)
+  model:
+    build:
+      context: ..
+      dockerfile: model-python/Dockerfile
+    container_name: trs_model
+    ports:
+      - "5104:5104"
     restart: unless-stopped
 
   # Frontend Service (Next.js + TypeScript)

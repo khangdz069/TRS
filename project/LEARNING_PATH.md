@@ -1,6 +1,6 @@
 # Lo Trinh Hieu Code TRS Rebuild
 
-Muc tieu: di tu "mo duoc app" den "giai thich duoc luong nop bai, grader va recommendation" trong code Java hien tai.
+Muc tieu: di tu "mo duoc app" den "giai thich duoc luong nop bai, grader Java va model Python hop den".
 
 ## Giai Doan 1 - Hieu Theo Nguoi Dung
 
@@ -28,7 +28,7 @@ Student bam Submit
 -> backend Java luu du lieu va goi grader
 -> grader Java compile/chay testcase
 -> backend Java luu ket qua
--> backend Java tao recommendation
+-> backend Java goi model Python de tao recommendation
 ```
 
 File can doc:
@@ -40,6 +40,8 @@ backend-java/src/main/java/com/trs/backend/service/SubmissionService.java
 grader-java/src/main/java/com/trs/grader/GraderController.java
 grader-java/src/main/java/com/trs/grader/GraderService.java
 backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
+backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
+model-python/app.py
 ```
 
 Cach doc:
@@ -83,21 +85,24 @@ Cau hoi can tra loi:
 - Testcase duoc chon tu dau?
 - Khi sinh vien chua sua testcase goi y lan truoc thi sao?
 - Khi het gioi han trong ngay thi sao?
-- Fallback Java dang chon testcase nhu the nao?
+- Java goi model Python o dau?
+- Neu model Python loi thi fallback Java dang chon testcase nhu the nao?
 
 File can doc:
 
 ```text
 backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
+backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
 backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java
 backend-java/src/main/java/com/trs/backend/model/Recommendation.java
+model-python/app.py
 ```
 
 Cau giai thich ngan:
 
 ```text
-He thong lay cac testcase fail, kiem tra dieu kien nghiep vu,
-roi chon toi da 3 testcase de goi y cho sinh vien.
+He thong lay cac testcase fail, kiem tra dieu kien nghiep vu trong Java,
+roi goi model Python de rank va chon toi da 3 testcase goi y.
 ```
 
 ## Giai Doan 5 - Hieu Grader
@@ -123,8 +128,8 @@ grader-java/assets/expected_outputs/
 Nen chuan bi 4 phan:
 
 1. Bai toan: sinh vien can goi y testcase phu hop sau khi nop bai.
-2. He thong: web app, backend Java, grader Java, recommendation service.
-3. Phuong phap: ranking failed testcases va cac rule nghiep vu.
+2. He thong: web app, backend Java, grader Java, model Python.
+3. Phuong phap: rule nghiep vu trong Java va ranking failed testcases trong model Python.
 4. Danh gia: testcase duoc goi y, feedback sinh vien, ti le sua duoc loi.
 
 ## Lich Doc Goi Y
@@ -156,8 +161,13 @@ Ngay 5:
 
 Ngay 6:
 
-- Doc entity va repository.
+- Doc `backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java`.
+- Doc `model-python/app.py`.
 
 Ngay 7:
+
+- Doc entity va repository.
+
+Ngay 8:
 
 - Tu giai thich project trong 5 phut ma khong nhin code.

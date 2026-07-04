@@ -20,6 +20,7 @@ Useful environment variables:
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
 - `GRADER_URL`
+- `MODEL_URL`
 - `JWT_SECRET`
 - `UPLOAD_DIR`
 
@@ -35,4 +36,4 @@ docker build -f backend-java/Dockerfile .
 
 The main REST API has been ported for the current frontend workflow: auth, assignments, student import, submissions, recommendations, testcase details, and feedback forms.
 
-The legacy backend has been moved out of the active source tree. The RSVD model rebuild endpoint currently returns `501`; the Java recommendation service uses a simple fallback strategy until the original NumPy model pipeline is ported.
+The legacy backend has been moved out of the active source tree. Runtime model inference is handled by the separate `model-python` service through `MODEL_URL`. The RSVD rebuild endpoint currently returns `501`; Java falls back to a simple recommendation strategy if the model service is unavailable.

@@ -14,9 +14,9 @@ Vai tro chinh:
 
 - Teacher tao assignment, import danh sach sinh vien va xem analytics feedback.
 - Student xem assignment, nop code, xem lich su cham, xem testcase duoc goi y va gui feedback.
-- Backend Java dieu phoi du lieu, goi grader va luu ket qua.
+- Backend Java dieu phoi du lieu, goi grader, goi model service va luu ket qua.
 - Grader Java compile/chay code C++ qua bo testcase.
-- Recommendation service chon toi da 3 testcase fail de goi y.
+- Model Python la hop den recommendation, dung NumPy/matrix de rank testcase fail.
 
 ## Bon Khoi Chay Chinh
 
@@ -24,6 +24,7 @@ Vai tro chinh:
 frontend/      -> Next.js UI, http://localhost:3100
 backend-java/  -> Spring Boot API, http://localhost:5102
 grader-java/   -> Spring Boot C++ grader, http://localhost:5103
+model-python/  -> Python recommendation model, http://localhost:5104
 database       -> PostgreSQL, localhost:55432
 ```
 
@@ -40,7 +41,7 @@ Nguoi dung chi can mo frontend o `http://localhost:3100`.
 6. Backend Java gui code sang grader Java
 7. Grader Java compile va chay testcase
 8. Backend Java luu submission va scores
-9. Recommendation service chon testcase fail de goi y
+9. Backend Java goi model-python de rank testcase fail
 10. Student xem goi y va gui feedback
 ```
 
@@ -97,6 +98,10 @@ backend-java luu Submission
         |
         v
 backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
+        |
+        | POST sang model /api/model/recommend
+        v
+model-python/app.py
 ```
 
 Neu chi doc mot luong truoc khi bao cao hoac debug, hay doc luong nay.
@@ -107,8 +112,11 @@ File can doc:
 
 ```text
 backend-java/src/main/java/com/trs/backend/service/RecommendationService.java
+backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
 backend-java/src/main/java/com/trs/backend/model/Recommendation.java
 backend-java/src/main/java/com/trs/backend/repository/RecommendationRepository.java
+model-python/app.py
+model-python/models/
 ```
 
 Y tuong hien tai:
@@ -116,8 +124,9 @@ Y tuong hien tai:
 - Lay danh sach testcase fail cua submission.
 - Neu sinh vien chua sua testcase goi y lan truoc thi tiep tuc tra lai goi y cu.
 - Neu da qua gioi han trong ngay thi tra ve `DAILY_LIMIT_REACHED`.
-- Neu co testcase fail moi thi chon toi da 3 testcase fail dau tien.
-- Danh dau `Fallback (Simple Java)` vi pipeline train RSVD/NumPy cu chua duoc port sang Java.
+- Neu co testcase fail moi thi backend goi `model-python`.
+- Model Python chon group, chon RSVD/timeSVD/LSTM va rank testcase fail theo matrix.
+- Neu model service loi thi backend dung `Fallback (Simple Java)`.
 
 ## Grader
 
@@ -172,13 +181,15 @@ Bang chinh:
 4. `grader-java/src/main/java/com/trs/grader/GraderService.java`
 5. `backend-java/src/main/java/com/trs/backend/model/Submission.java`
 6. `backend-java/src/main/java/com/trs/backend/service/RecommendationService.java`
-7. `frontend/src/app/teacher/page.tsx`
-8. Cac entity con lai trong `backend-java/src/main/java/com/trs/backend/model/`
+7. `backend-java/src/main/java/com/trs/backend/service/ModelRecommendationClient.java`
+8. `model-python/app.py`
+9. `frontend/src/app/teacher/page.tsx`
+10. Cac entity con lai trong `backend-java/src/main/java/com/trs/backend/model/`
 
 ## Ghi Chu Hien Trang
 
 - Auth hien la dev-auth don gian, chua phai OAuth that.
 - Frontend page student/teacher con lon, sau nay nen tach component/hook.
-- Java backend va Java grader la source dang chay chinh.
+- Java backend va Java grader la source chinh; model Python duoc tach rieng nhu hop den.
 - `project/backups/` chi de backup local, khong phai code dang chay.
 - `project/docs/trs_flow_visualization.html` la visualization phu, khong phai runtime dependency.

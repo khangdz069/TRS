@@ -17,9 +17,13 @@ import com.trs.backend.repository.RecommendationRepository;
 @Service
 public class RecommendationService {
     private final RecommendationRepository recommendationRepository;
+    private final ModelRecommendationClient modelRecommendationClient;
 
-    public RecommendationService(RecommendationRepository recommendationRepository) {
+    public RecommendationService(
+            RecommendationRepository recommendationRepository,
+            ModelRecommendationClient modelRecommendationClient) {
         this.recommendationRepository = recommendationRepository;
+        this.modelRecommendationClient = modelRecommendationClient;
     }
 
     public Recommendation generateRecommendation(Submission submission) {
@@ -62,11 +66,25 @@ public class RecommendationService {
             return recommendation;
         }
 
-        recommendation.setStatus("READY");
-        recommendation.setRecommendedTestcases(failedIds.stream().limit(3).toList());
-        recommendation.setModelUsed("Fallback (Simple Java)");
-        recommendation.setSamplingGroup("Unknown");
-        recommendation.setFallback(true);
+        modelRecommendationClient.recommend(
+                submission.getAssignment().getId().toString(),
+                submission.getStudent().getMssv(),
+                failedIds,
+                3
+        ).filter(response -> response.recommendedTestcases() != null && !response.recommendedTestcases().isEmpty())
+                .ifPresentOrElse(response -> {
+                    recommendation.setStatus(response.status() == null ? "READY" : response.status());
+                    recommendation.setRecommendedTestcases(response.recommendedTestcases());
+                    recommendation.setModelUsed(response.modelUsed());
+                    recommendation.setSamplingGroup(response.samplingGroup());
+                    recommendation.setFallback(response.fallback());
+                }, () -> {
+                    recommendation.setStatus("READY");
+                    recommendation.setRecommendedTestcases(failedIds.stream().limit(3).toList());
+                    recommendation.setModelUsed("Fallback (Simple Java)");
+                    recommendation.setSamplingGroup("Unknown");
+                    recommendation.setFallback(true);
+                });
         return recommendation;
     }
 
