@@ -16,7 +16,7 @@ interface Assignment {
 interface Submission {
   id: string;
   status: string;
-  scores: Record<string, boolean> | boolean[] | null;
+  scores: Record<string, boolean> | boolean[] | string | null;
   failed_outputs?: Record<string, {
     expected?: string | null;
     actual?: string | null;
@@ -87,6 +87,14 @@ const TESTCASE_IDS = [
 
 const normalizeScores = (scores: Submission["scores"]): ScoreEntry[] => {
   if (!scores) return [];
+
+  if (typeof scores === "string") {
+    try {
+      return normalizeScores(JSON.parse(scores));
+    } catch {
+      return [];
+    }
+  }
 
   if (Array.isArray(scores)) {
     return scores.map((passed, index) => ({

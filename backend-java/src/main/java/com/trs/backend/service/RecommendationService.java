@@ -72,9 +72,10 @@ public class RecommendationService {
 
     public static List<Integer> failedTestcaseIds(Object scores) {
         List<Integer> failed = new ArrayList<>();
+        scores = JsonValues.normalize(scores);
         if (scores instanceof Map<?, ?> map) {
             map.forEach((key, value) -> {
-                if (!Boolean.TRUE.equals(value)) {
+                if (!isPassedValue(value)) {
                     try {
                         failed.add(Integer.parseInt(String.valueOf(key)));
                     } catch (NumberFormatException ignored) {
@@ -87,7 +88,7 @@ public class RecommendationService {
 
         if (scores instanceof List<?> list) {
             for (int i = 0; i < list.size() && i < TestcaseCatalog.TESTCASE_IDS.size(); i++) {
-                if (!Boolean.TRUE.equals(list.get(i))) {
+                if (!isPassedValue(list.get(i))) {
                     failed.add(TestcaseCatalog.TESTCASE_IDS.get(i));
                 }
             }
@@ -97,13 +98,21 @@ public class RecommendationService {
     }
 
     public static boolean passed(Object scores, int tcId) {
+        scores = JsonValues.normalize(scores);
         if (scores instanceof Map<?, ?> map) {
-            return Boolean.TRUE.equals(map.get(String.valueOf(tcId)));
+            return isPassedValue(map.get(String.valueOf(tcId)));
         }
         if (scores instanceof List<?> list && TestcaseCatalog.TESTCASE_IDS.contains(tcId)) {
             int idx = TestcaseCatalog.TESTCASE_IDS.indexOf(tcId);
-            return idx < list.size() && Boolean.TRUE.equals(list.get(idx));
+            return idx < list.size() && isPassedValue(list.get(idx));
         }
         return false;
+    }
+
+    private static boolean isPassedValue(Object value) {
+        if (value instanceof Boolean passed) {
+            return passed;
+        }
+        return "true".equalsIgnoreCase(String.valueOf(value));
     }
 }

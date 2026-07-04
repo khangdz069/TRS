@@ -67,7 +67,7 @@ public class DtoMapper {
         map.put("assignment_id", submission.getAssignment().getId().toString());
         map.put("assignment_name", submission.getAssignment().getName());
         map.put("files", submission.getFiles());
-        map.put("scores", submission.getScores());
+        map.put("scores", JsonValues.normalize(submission.getScores()));
         map.put("status", submission.getStatus());
         map.put("compile_error", submission.getCompileError());
         map.put("runtime_error", submission.getRuntimeError());
