@@ -26,10 +26,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.trs.backend.model.Account;
-import com.trs.backend.model.Assignment;
-import com.trs.backend.model.Student;
-import com.trs.backend.model.StudentOnAssignment;
+import com.trs.backend.entity.Account;
+import com.trs.backend.entity.Assignment;
+import com.trs.backend.entity.Student;
+import com.trs.backend.entity.StudentOnAssignment;
 import com.trs.backend.repository.AccountRepository;
 import com.trs.backend.repository.AssignmentRepository;
 import com.trs.backend.repository.StudentOnAssignmentRepository;

@@ -10,8 +10,8 @@ import java.util.Map;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
-import com.trs.backend.model.Recommendation;
-import com.trs.backend.model.Submission;
+import com.trs.backend.entity.Recommendation;
+import com.trs.backend.entity.Submission;
 import com.trs.backend.repository.RecommendationRepository;
 
 @Service

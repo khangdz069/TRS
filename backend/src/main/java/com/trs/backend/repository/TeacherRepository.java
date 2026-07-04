@@ -5,7 +5,7 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.trs.backend.model.Teacher;
+import com.trs.backend.entity.Teacher;
 
 public interface TeacherRepository extends JpaRepository<Teacher, UUID> {
     Optional<Teacher> findByAccountId(UUID accountId);

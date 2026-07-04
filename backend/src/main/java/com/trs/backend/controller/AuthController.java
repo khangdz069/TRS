@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trs.backend.dto.LoginRequest;
-import com.trs.backend.model.Account;
-import com.trs.backend.model.Student;
-import com.trs.backend.model.Teacher;
+import com.trs.backend.entity.Account;
+import com.trs.backend.entity.Student;
+import com.trs.backend.entity.Teacher;
 import com.trs.backend.repository.AccountRepository;
 import com.trs.backend.repository.StudentRepository;
 import com.trs.backend.repository.TeacherRepository;

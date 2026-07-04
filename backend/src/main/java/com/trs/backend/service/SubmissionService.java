@@ -19,8 +19,8 @@ import org.springframework.web.client.RestTemplate;
 import com.trs.backend.dto.GraderPayload;
 import com.trs.backend.dto.GraderPayloadFile;
 import com.trs.backend.dto.GraderResult;
-import com.trs.backend.model.Recommendation;
-import com.trs.backend.model.Submission;
+import com.trs.backend.entity.Recommendation;
+import com.trs.backend.entity.Submission;
 import com.trs.backend.repository.RecommendationRepository;
 import com.trs.backend.repository.SubmissionRepository;
 

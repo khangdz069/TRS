@@ -5,13 +5,13 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-import com.trs.backend.model.Account;
-import com.trs.backend.model.Assignment;
-import com.trs.backend.model.FeedbackForm;
-import com.trs.backend.model.Recommendation;
-import com.trs.backend.model.Student;
-import com.trs.backend.model.Submission;
-import com.trs.backend.model.Teacher;
+import com.trs.backend.entity.Account;
+import com.trs.backend.entity.Assignment;
+import com.trs.backend.entity.FeedbackForm;
+import com.trs.backend.entity.Recommendation;
+import com.trs.backend.entity.Student;
+import com.trs.backend.entity.Submission;
+import com.trs.backend.entity.Teacher;
 
 @Component
 public class DtoMapper {

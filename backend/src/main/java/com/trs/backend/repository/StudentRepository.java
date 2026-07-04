@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.trs.backend.model.Student;
+import com.trs.backend.entity.Student;
 
 public interface StudentRepository extends JpaRepository<Student, UUID> {
     Optional<Student> findByAccountId(UUID accountId);

@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trs.backend.dto.FeedbackRequest;
-import com.trs.backend.model.FeedbackForm;
-import com.trs.backend.model.Recommendation;
-import com.trs.backend.model.Submission;
+import com.trs.backend.entity.FeedbackForm;
+import com.trs.backend.entity.Recommendation;
+import com.trs.backend.entity.Submission;
 import com.trs.backend.repository.FeedbackFormRepository;
 import com.trs.backend.repository.RecommendationRepository;
 import com.trs.backend.repository.SubmissionRepository;

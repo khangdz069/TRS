@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.trs.backend.model.FeedbackForm;
+import com.trs.backend.entity.FeedbackForm;
 
 public interface FeedbackFormRepository extends JpaRepository<FeedbackForm, UUID> {
     Optional<FeedbackForm> findBySubmissionId(UUID submissionId);

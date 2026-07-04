@@ -1,4 +1,4 @@
-package com.trs.backend.model;
+package com.trs.backend.entity;
 
 import java.util.ArrayList;
 import java.util.List;

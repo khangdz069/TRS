@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.trs.backend.model.Recommendation;
-import com.trs.backend.model.Student;
-import com.trs.backend.model.Submission;
+import com.trs.backend.entity.Recommendation;
+import com.trs.backend.entity.Student;
+import com.trs.backend.entity.Submission;
 import com.trs.backend.repository.RecommendationRepository;
 import com.trs.backend.repository.SubmissionRepository;
 import com.trs.backend.service.AuthService;

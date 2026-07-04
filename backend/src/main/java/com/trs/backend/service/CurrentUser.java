@@ -1,8 +1,8 @@
 package com.trs.backend.service;
 
-import com.trs.backend.model.Account;
-import com.trs.backend.model.Student;
-import com.trs.backend.model.Teacher;
+import com.trs.backend.entity.Account;
+import com.trs.backend.entity.Student;
+import com.trs.backend.entity.Teacher;
 
 public record CurrentUser(
         Account account,

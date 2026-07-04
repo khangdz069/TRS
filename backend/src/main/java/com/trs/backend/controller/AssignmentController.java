@@ -19,9 +19,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.trs.backend.dto.CreateAssignmentRequest;
-import com.trs.backend.model.Assignment;
-import com.trs.backend.model.Student;
-import com.trs.backend.model.Teacher;
+import com.trs.backend.entity.Assignment;
+import com.trs.backend.entity.Student;
+import com.trs.backend.entity.Teacher;
 import com.trs.backend.repository.AssignmentRepository;
 import com.trs.backend.repository.StudentOnAssignmentRepository;
 import com.trs.backend.repository.StudentRepository;

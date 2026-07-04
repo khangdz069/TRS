@@ -113,7 +113,7 @@ File can doc:
 ```text
 backend/src/main/java/com/trs/backend/service/RecommendationService.java
 backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
-backend/src/main/java/com/trs/backend/model/Recommendation.java
+backend/src/main/java/com/trs/backend/entity/Recommendation.java
 backend/src/main/java/com/trs/backend/repository/RecommendationRepository.java
 model-python/app.py
 model-python/models/
@@ -153,7 +153,7 @@ Grader lam cac viec chinh:
 Entity nam trong:
 
 ```text
-backend/src/main/java/com/trs/backend/model/
+backend/src/main/java/com/trs/backend/entity/
 ```
 
 Repository nam trong:
@@ -179,12 +179,12 @@ Bang chinh:
 2. `backend/src/main/java/com/trs/backend/controller/SubmissionController.java`
 3. `backend/src/main/java/com/trs/backend/service/SubmissionService.java`
 4. `grader/src/main/java/com/trs/grader/GraderService.java`
-5. `backend/src/main/java/com/trs/backend/model/Submission.java`
+5. `backend/src/main/java/com/trs/backend/entity/Submission.java`
 6. `backend/src/main/java/com/trs/backend/service/RecommendationService.java`
 7. `backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java`
 8. `model-python/app.py`
 9. `frontend/src/app/teacher/page.tsx`
-10. Cac entity con lai trong `backend/src/main/java/com/trs/backend/model/`
+10. Cac entity con lai trong `backend/src/main/java/com/trs/backend/entity/`
 
 ## Ghi Chu Hien Trang
 

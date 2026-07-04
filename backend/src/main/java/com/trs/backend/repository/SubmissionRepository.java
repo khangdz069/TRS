@@ -6,7 +6,7 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import com.trs.backend.model.Submission;
+import com.trs.backend.entity.Submission;
 
 public interface SubmissionRepository extends JpaRepository<Submission, UUID> {
     List<Submission> findByAssignmentIdOrderByCreatedAtDesc(UUID assignmentId);

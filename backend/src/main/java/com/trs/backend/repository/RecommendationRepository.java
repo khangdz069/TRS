@@ -10,7 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import com.trs.backend.model.Recommendation;
+import com.trs.backend.entity.Recommendation;
 
 public interface RecommendationRepository extends JpaRepository<Recommendation, UUID> {
     Optional<Recommendation> findBySubmissionId(UUID submissionId);

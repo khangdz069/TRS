@@ -56,7 +56,7 @@ Cach doc:
 Entity can doc:
 
 ```text
-backend/src/main/java/com/trs/backend/model/
+backend/src/main/java/com/trs/backend/entity/
 ```
 
 Repository can doc:
@@ -94,7 +94,7 @@ File can doc:
 backend/src/main/java/com/trs/backend/service/RecommendationService.java
 backend/src/main/java/com/trs/backend/service/ModelRecommendationClient.java
 backend/src/main/java/com/trs/backend/repository/RecommendationRepository.java
-backend/src/main/java/com/trs/backend/model/Recommendation.java
+backend/src/main/java/com/trs/backend/entity/Recommendation.java
 model-python/app.py
 ```
 
