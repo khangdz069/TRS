@@ -28,9 +28,6 @@ public class Assignment extends BaseEntity {
     @Column(name = "end_date", nullable = false)
     private OffsetDateTime endDate;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean active = true;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_id", nullable = false)
     private Teacher author;
@@ -68,14 +65,6 @@ public class Assignment extends BaseEntity {
 
     public void setEndDate(OffsetDateTime endDate) {
         this.endDate = endDate;
-    }
-
-    public boolean isActive() {
-        return active;
-    }
-
-    public void setActive(boolean active) {
-        this.active = active;
     }
 
     public Teacher getAuthor() {

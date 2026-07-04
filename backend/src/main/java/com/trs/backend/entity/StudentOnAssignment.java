@@ -1,6 +1,5 @@
 package com.trs.backend.entity;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -22,9 +21,6 @@ public class StudentOnAssignment extends BaseEntity {
     @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean active = true;
-
     public Student getStudent() {
         return student;
     }
@@ -41,11 +37,4 @@ public class StudentOnAssignment extends BaseEntity {
         this.assignment = assignment;
     }
 
-    public boolean isActive() {
-        return active;
-    }
-
-    public void setActive(boolean active) {
-        this.active = active;
-    }
 }

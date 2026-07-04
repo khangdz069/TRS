@@ -56,7 +56,7 @@ public class SubmissionService {
             GraderResult result = response.getBody();
             if (response.getStatusCode().is2xxSuccessful() && result != null) {
                 submission.setStatus(result.status() == null ? "SUCCESS" : result.status());
-                submission.setScores(JsonValues.toJsonText(result.scores()));
+                submission.setScores(result.scores());
                 submission.setFailedOutputs(result.failedOutputs() == null ? new LinkedHashMap<>() : result.failedOutputs());
                 submission.setCompileError(result.compileError());
                 submission.setRuntimeError(result.runtimeError());

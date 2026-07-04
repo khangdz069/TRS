@@ -50,7 +50,7 @@ public class RecommendationService {
                 submission.getStudent().getId(),
                 submission.getAssignment().getId(),
                 submission.getId(),
-                "READY",
+                1,
                 PageRequest.of(0, 1)
         ).stream().findFirst().ifPresent(previous -> {
             for (Integer tcId : previous.getRecommendedTestcases()) {

@@ -1,6 +1,6 @@
 package com.trs.backend.entity;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.hibernate.annotations.JdbcTypeCode;
@@ -14,19 +14,19 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "feedback_forms")
+@Table(name = "forms")
 public class FeedbackForm extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "submission_id", nullable = false, unique = true)
     private Submission submission;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "list_used_tcids", columnDefinition = "json")
-    private List<Integer> listUsedTcids = new ArrayList<>();
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "list_used_tcids", columnDefinition = "integer[]")
+    private Integer[] listUsedTcids = new Integer[0];
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "time_ordered_tcids", columnDefinition = "json")
-    private List<Integer> timeOrderedTcids = new ArrayList<>();
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "time_ordered_tcids", columnDefinition = "integer[]")
+    private Integer[] timeOrderedTcids = new Integer[0];
 
     @Column(nullable = false)
     private int scores;
@@ -43,19 +43,19 @@ public class FeedbackForm extends BaseEntity {
     }
 
     public List<Integer> getListUsedTcids() {
-        return listUsedTcids;
+        return listUsedTcids == null ? List.of() : Arrays.asList(listUsedTcids);
     }
 
     public void setListUsedTcids(List<Integer> listUsedTcids) {
-        this.listUsedTcids = listUsedTcids;
+        this.listUsedTcids = toIntegerArray(listUsedTcids);
     }
 
     public List<Integer> getTimeOrderedTcids() {
-        return timeOrderedTcids;
+        return timeOrderedTcids == null ? List.of() : Arrays.asList(timeOrderedTcids);
     }
 
     public void setTimeOrderedTcids(List<Integer> timeOrderedTcids) {
-        this.timeOrderedTcids = timeOrderedTcids;
+        this.timeOrderedTcids = toIntegerArray(timeOrderedTcids);
     }
 
     public int getScores() {
@@ -72,5 +72,12 @@ public class FeedbackForm extends BaseEntity {
 
     public void setFeedback(String feedback) {
         this.feedback = feedback;
+    }
+
+    private static Integer[] toIntegerArray(List<Integer> values) {
+        if (values == null) {
+            return new Integer[0];
+        }
+        return values.stream().filter(value -> value != null).toArray(Integer[]::new);
     }
 }

@@ -22,9 +22,11 @@ import com.trs.backend.dto.CreateAssignmentRequest;
 import com.trs.backend.entity.Assignment;
 import com.trs.backend.entity.Student;
 import com.trs.backend.entity.Teacher;
+import com.trs.backend.entity.TeacherOnAssignment;
 import com.trs.backend.repository.AssignmentRepository;
 import com.trs.backend.repository.StudentOnAssignmentRepository;
 import com.trs.backend.repository.StudentRepository;
+import com.trs.backend.repository.TeacherOnAssignmentRepository;
 import com.trs.backend.service.AuthService;
 import com.trs.backend.service.CurrentUser;
 import com.trs.backend.service.DtoMapper;
@@ -35,6 +37,7 @@ public class AssignmentController {
     private final AssignmentRepository assignmentRepository;
     private final StudentRepository studentRepository;
     private final StudentOnAssignmentRepository studentOnAssignmentRepository;
+    private final TeacherOnAssignmentRepository teacherOnAssignmentRepository;
     private final AuthService authService;
     private final DtoMapper mapper;
 
@@ -42,11 +45,13 @@ public class AssignmentController {
             AssignmentRepository assignmentRepository,
             StudentRepository studentRepository,
             StudentOnAssignmentRepository studentOnAssignmentRepository,
+            TeacherOnAssignmentRepository teacherOnAssignmentRepository,
             AuthService authService,
             DtoMapper mapper) {
         this.assignmentRepository = assignmentRepository;
         this.studentRepository = studentRepository;
         this.studentOnAssignmentRepository = studentOnAssignmentRepository;
+        this.teacherOnAssignmentRepository = teacherOnAssignmentRepository;
         this.authService = authService;
         this.mapper = mapper;
     }
@@ -86,6 +91,12 @@ public class AssignmentController {
         assignment.setEndDate(endDate);
         assignment.setAuthor(currentUser.teacher());
         assignmentRepository.save(assignment);
+
+        TeacherOnAssignment ownership = new TeacherOnAssignment();
+        ownership.setTeacher(currentUser.teacher());
+        ownership.setAssignment(assignment);
+        ownership.setLeader(true);
+        teacherOnAssignmentRepository.save(ownership);
 
         return ResponseEntity.status(201).body(mapper.assignment(assignment));
     }

@@ -18,7 +18,7 @@ public interface RecommendationRepository extends JpaRepository<Recommendation, 
     @Query("""
             select count(r) from Recommendation r
             where r.submission.student.id = :studentId
-              and r.status = 'READY'
+              and r.status = 1
               and r.createdAt >= :startOfDay
             """)
     long countReadyForStudentSince(@Param("studentId") UUID studentId, @Param("startOfDay") OffsetDateTime startOfDay);
@@ -28,13 +28,13 @@ public interface RecommendationRepository extends JpaRepository<Recommendation, 
             where r.submission.student.id = :studentId
               and r.submission.assignment.id = :assignmentId
               and r.submission.id <> :submissionId
-              and r.status = :status
+              and r.status = :statusCode
             order by r.createdAt desc
             """)
     List<Recommendation> findPreviousReadyRecommendations(
             @Param("studentId") UUID studentId,
             @Param("assignmentId") UUID assignmentId,
             @Param("submissionId") UUID submissionId,
-            @Param("status") String status,
+            @Param("statusCode") int statusCode,
             Pageable pageable);
 }

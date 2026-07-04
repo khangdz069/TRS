@@ -171,7 +171,7 @@ Bang chinh:
 - `student_on_assignments`
 - `submissions`
 - `recommendations`
-- `feedback_forms`
+- `forms`
 
 ## Thu Tu Doc Code
 

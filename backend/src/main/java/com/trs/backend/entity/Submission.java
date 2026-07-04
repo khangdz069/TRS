@@ -1,6 +1,7 @@
 package com.trs.backend.entity;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 @Entity
 @Table(name = "submissions")
@@ -28,25 +30,24 @@ public class Submission extends BaseEntity {
     @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false, columnDefinition = "json")
-    private List<Map<String, Object>> files = new ArrayList<>();
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(nullable = false, columnDefinition = "varchar[]")
+    private String[] files = new String[0];
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "json")
-    private Object scores;
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(columnDefinition = "boolean[]")
+    private Boolean[] scores = new Boolean[0];
 
     @Column(nullable = false, length = 50)
     private String status = "PENDING";
 
-    @Column(name = "compile_error", columnDefinition = "text")
+    @Transient
     private String compileError;
 
-    @Column(name = "runtime_error", columnDefinition = "text")
+    @Transient
     private String runtimeError;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "failed_outputs", columnDefinition = "json")
+    @Transient
     private Map<String, Object> failedOutputs = new LinkedHashMap<>();
 
     @OneToOne(mappedBy = "submission", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
@@ -72,19 +73,33 @@ public class Submission extends BaseEntity {
     }
 
     public List<Map<String, Object>> getFiles() {
-        return files;
+        List<Map<String, Object>> savedFiles = new ArrayList<>();
+        for (String path : files == null ? new String[0] : files) {
+            Map<String, Object> file = new LinkedHashMap<>();
+            file.put("filename", filenameFromPath(path));
+            file.put("path", path);
+            savedFiles.add(file);
+        }
+        return savedFiles;
     }
 
     public void setFiles(List<Map<String, Object>> files) {
-        this.files = files;
+        if (files == null) {
+            this.files = new String[0];
+            return;
+        }
+        this.files = files.stream()
+                .map(file -> file == null ? "" : String.valueOf(file.getOrDefault("path", file.getOrDefault("filename", ""))))
+                .filter(path -> path != null && !path.isBlank())
+                .toArray(String[]::new);
     }
 
     public Object getScores() {
-        return scores;
+        return scores == null ? List.of() : Arrays.asList(scores);
     }
 
     public void setScores(Object scores) {
-        this.scores = scores;
+        this.scores = toBooleanArray(scores);
     }
 
     public String getStatus() {
@@ -133,5 +148,54 @@ public class Submission extends BaseEntity {
 
     public void setForm(FeedbackForm form) {
         this.form = form;
+    }
+
+    private static Boolean[] toBooleanArray(Object value) {
+        if (value == null) {
+            return new Boolean[0];
+        }
+        if (value instanceof Boolean[] booleans) {
+            return booleans;
+        }
+        if (value instanceof boolean[] booleans) {
+            Boolean[] boxed = new Boolean[booleans.length];
+            for (int i = 0; i < booleans.length; i++) {
+                boxed[i] = booleans[i];
+            }
+            return boxed;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(Submission::toBoolean).toArray(Boolean[]::new);
+        }
+        if (value instanceof Map<?, ?> map) {
+            return map.values().stream().map(Submission::toBoolean).toArray(Boolean[]::new);
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            String normalized = text.replace("[", "").replace("]", "");
+            if (normalized.isBlank()) {
+                return new Boolean[0];
+            }
+            return Arrays.stream(normalized.split(","))
+                    .map(String::trim)
+                    .map(Submission::toBoolean)
+                    .toArray(Boolean[]::new);
+        }
+        return new Boolean[0];
+    }
+
+    private static Boolean toBoolean(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return Boolean.parseBoolean(String.valueOf(value));
+    }
+
+    private static String filenameFromPath(String path) {
+        if (path == null || path.isBlank()) {
+            return "";
+        }
+        String normalized = path.replace('\\', '/');
+        int slash = normalized.lastIndexOf('/');
+        return slash >= 0 ? normalized.substring(slash + 1) : normalized;
     }
 }

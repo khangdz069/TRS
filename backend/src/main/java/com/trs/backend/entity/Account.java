@@ -16,11 +16,8 @@ public class Account extends BaseEntity {
     @Column(nullable = false, length = 255)
     private String name;
 
-    @Column(nullable = false, length = 50)
-    private String role;
-
-    @Column(name = "is_active", nullable = false)
-    private boolean active = true;
+    @Column(name = "type", nullable = false, length = 50)
+    private String type;
 
     @OneToOne(mappedBy = "account", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Student student;
@@ -45,19 +42,19 @@ public class Account extends BaseEntity {
     }
 
     public String getRole() {
-        return role;
+        return type;
     }
 
     public void setRole(String role) {
-        this.role = role;
+        this.type = role;
     }
 
-    public boolean isActive() {
-        return active;
+    public String getType() {
+        return type;
     }
 
-    public void setActive(boolean active) {
-        this.active = active;
+    public void setType(String type) {
+        this.type = type;
     }
 
     public Student getStudent() {
