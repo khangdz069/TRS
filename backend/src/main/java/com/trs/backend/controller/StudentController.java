@@ -64,6 +64,7 @@ public class StudentController {
     public ResponseEntity<?> importStudents(
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @RequestParam(value = "assignment_id", required = false) String assignmentIdValue,
+            @RequestParam(value = "class_section", required = false) String classSectionValue,
             @RequestParam(value = "file", required = false) MultipartFile file) {
         CurrentUser currentUser = authService.fromAuthorizationHeader(authorization).orElse(null);
         if (currentUser == null) {
@@ -90,6 +91,9 @@ public class StudentController {
         if (assignment == null) {
             return ResponseEntity.status(404).body(Map.of("error", "Assignment not found"));
         }
+        String classSection = classSectionValue == null || classSectionValue.isBlank()
+                ? "Default"
+                : classSectionValue.trim();
 
         List<Map<String, String>> rows;
         try {
@@ -128,10 +132,18 @@ public class StudentController {
                 }
 
                 Student student = ensureStudent(mssv, email.trim(), name.trim());
-                if (studentOnAssignmentRepository.findByStudentIdAndAssignmentId(student.getId(), assignment.getId()).isEmpty()) {
-                    StudentOnAssignment registration = new StudentOnAssignment();
+                StudentOnAssignment registration = studentOnAssignmentRepository
+                        .findByStudentIdAndAssignmentId(student.getId(), assignment.getId())
+                        .orElse(null);
+                if (registration == null) {
+                    registration = new StudentOnAssignment();
                     registration.setStudent(student);
                     registration.setAssignment(assignment);
+                    registration.setClassSection(classSection);
+                    studentOnAssignmentRepository.save(registration);
+                } else {
+                    registration.setClassSection(classSection);
+                    registration.setActive(true);
                     studentOnAssignmentRepository.save(registration);
                 }
                 importedCount++;
@@ -141,8 +153,9 @@ public class StudentController {
         }
 
         return ResponseEntity.ok(Map.of(
-                "message", "Successfully registered " + importedCount + " students to assignment " + assignment.getName(),
+                "message", "Successfully registered " + importedCount + " students to " + classSection + " in assignment " + assignment.getName(),
                 "imported_count", importedCount,
+                "class_section", classSection,
                 "errors", errors
         ));
     }

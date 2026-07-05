@@ -1,6 +1,7 @@
 package com.trs.backend.entity;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Column;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -21,6 +22,9 @@ public class StudentOnAssignment extends BaseEntity {
     @JoinColumn(name = "assignment_id", nullable = false)
     private Assignment assignment;
 
+    @Column(name = "class_section", nullable = false, length = 120)
+    private String classSection = "Default";
+
     public Student getStudent() {
         return student;
     }
@@ -35,6 +39,14 @@ public class StudentOnAssignment extends BaseEntity {
 
     public void setAssignment(Assignment assignment) {
         this.assignment = assignment;
+    }
+
+    public String getClassSection() {
+        return classSection;
+    }
+
+    public void setClassSection(String classSection) {
+        this.classSection = classSection;
     }
 
 }

@@ -400,6 +400,16 @@ textarea.form-control {
   opacity: 0.9;
 }
 
+.btn-danger {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  color: rgb(248, 113, 113);
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
 /* Upload Area (Drag & Drop Mock) */
 .upload-zone {
   border: 2px dashed hsl(var(--border-color));
@@ -593,6 +603,388 @@ textarea.form-control {
 .mock-badge.primary {
   background: rgba(6, 182, 212, 0.15);
   color: hsl(var(--color-primary));
+}
+
+/* Assignment management */
+.teacher-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: hsl(var(--text-secondary));
+  font-size: 0.9rem;
+}
+
+.teacher-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.metric-card {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.metric-card span,
+.info-cell span,
+.selected-assignment-summary span {
+  display: block;
+  color: hsl(var(--text-muted));
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.metric-card strong {
+  display: block;
+  color: hsl(var(--text-primary));
+  font-size: 1.55rem;
+  line-height: 1.2;
+  margin-top: 0.3rem;
+}
+
+.assignment-command-panel {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: stretch;
+  background: hsl(var(--bg-surface));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.assignment-command-panel h2 {
+  font-size: 1.1rem;
+  margin: 0.15rem 0 0.25rem;
+}
+
+.assignment-command-panel p {
+  color: hsl(var(--text-secondary));
+  max-width: 720px;
+}
+
+.eyebrow {
+  color: hsl(var(--color-primary));
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.selected-assignment-summary {
+  min-width: 240px;
+  border-left: 1px solid hsl(var(--border-color));
+  padding-left: 1.25rem;
+}
+
+.selected-assignment-summary strong {
+  display: block;
+  margin: 0.25rem 0;
+}
+
+.selected-assignment-summary small {
+  color: hsl(var(--text-secondary));
+}
+
+.assignment-card {
+  cursor: pointer;
+  border-radius: 8px;
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.assignment-card:hover,
+.assignment-card.selected {
+  border-color: hsl(var(--color-primary));
+  background: rgba(6, 182, 212, 0.045);
+}
+
+.assignment-card:hover {
+  transform: translateY(-1px);
+}
+
+.assignment-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.assignment-meta-grid,
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.info-cell {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.75rem;
+  min-width: 0;
+}
+
+.info-cell strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: hsl(var(--text-primary));
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.assignment-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.assignment-type-option {
+  background: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  color: hsl(var(--text-primary));
+  cursor: pointer;
+  padding: 0.85rem;
+  text-align: left;
+}
+
+.assignment-type-option span {
+  display: block;
+  color: hsl(var(--text-muted));
+  font-size: 0.8rem;
+  line-height: 1.45;
+  margin-top: 0.25rem;
+}
+
+.assignment-type-option.selected,
+.language-chip.selected {
+  border-color: hsl(var(--color-primary));
+  background: rgba(6, 182, 212, 0.12);
+}
+
+.language-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.language-chip {
+  align-items: center;
+  background: hsl(var(--bg-card));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 6px;
+  color: hsl(var(--text-secondary));
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.4rem;
+  min-height: 36px;
+  padding: 0.45rem 0.7rem;
+}
+
+.language-chip input {
+  accent-color: hsl(var(--color-primary));
+}
+
+.assignment-testcase-builder {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.assignment-logic-panel,
+.assignment-people-panel {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.assignment-people-panel {
+  margin-bottom: 1.5rem;
+}
+
+.assignment-people-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.people-tool {
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.people-tool h4 {
+  margin-bottom: 0.75rem;
+}
+
+.upload-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: hsl(var(--bg-card));
+  border: 1px dashed hsl(var(--border-color));
+  border-radius: 8px;
+  color: hsl(var(--text-secondary));
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+  padding: 0.9rem;
+}
+
+.upload-strip strong {
+  color: hsl(var(--text-primary));
+}
+
+.compact-inline-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+}
+
+.teacher-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.teacher-chip-list span {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  border-radius: 999px;
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+}
+
+.student-mini-table {
+  margin-top: 1rem;
+}
+
+.class-roster-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.class-roster-tabs button {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 6px;
+  color: hsl(var(--text-secondary));
+  cursor: pointer;
+  padding: 0.45rem 0.7rem;
+}
+
+.class-roster-tabs button.active {
+  background: rgba(6, 182, 212, 0.14);
+  border-color: hsl(var(--color-primary));
+  color: hsl(var(--text-primary));
+}
+
+.class-roster-tabs span {
+  color: hsl(var(--text-muted));
+  margin-left: 0.35rem;
+}
+
+.notice {
+  border-radius: 8px;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.notice.success {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  color: hsl(var(--color-success));
+}
+
+.notice.danger {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  color: rgb(248, 113, 113);
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.panel-title-row h4,
+.panel-title-row h3 {
+  margin: 0;
+}
+
+.panel-title-row p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.86rem;
+  margin-top: 0.25rem;
+}
+
+.panel-title-row span {
+  color: hsl(var(--text-muted));
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.testcase-builder-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(280px, 1.25fr);
+  gap: 1rem;
+}
+
+.testcase-textarea,
+.generated-preview pre,
+.testcase-preview-card pre {
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+}
+
+.generated-preview {
+  border-top: 1px solid hsl(var(--border-color));
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.generated-preview pre,
+.testcase-preview-card pre {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  color: hsl(var(--text-secondary));
+  max-height: 180px;
+  overflow: auto;
+  padding: 0.85rem;
+  white-space: pre-wrap;
+}
+
+.modal-container {
+  max-width: 880px;
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+}
+
+.empty-state {
+  background: hsl(var(--bg-surface));
+  border: 1px dashed hsl(var(--border-color));
+  border-radius: 8px;
+  color: hsl(var(--text-muted));
+  padding: 2rem;
+  text-align: center;
 }
 
 /* Footer */

@@ -15,6 +15,8 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
 
     List<Assignment> findByAuthorIdOrderByCreatedAtDesc(UUID authorId);
 
+    List<Assignment> findByAuthorIdAndActiveTrueOrderByCreatedAtDesc(UUID authorId);
+
     @Query("""
             select a from Assignment a
             join StudentOnAssignment soa on soa.assignment = a

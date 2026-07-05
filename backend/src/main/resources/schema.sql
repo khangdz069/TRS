@@ -320,6 +320,61 @@ end $$;
 
 do $$
 begin
+    if to_regclass('public.assignments') is not null then
+        alter table public.assignments add column if not exists assignment_type varchar(50);
+        alter table public.assignments add column if not exists supported_languages text;
+        alter table public.assignments add column if not exists testcase_samples text;
+        alter table public.assignments add column if not exists testcase_generation_strategy varchar(50);
+        alter table public.assignments add column if not exists testcase_seed_count integer;
+        alter table public.assignments add column if not exists generated_testcase_count integer;
+        alter table public.assignments add column if not exists problem_statement text;
+        alter table public.assignments add column if not exists starter_code text;
+        alter table public.assignments add column if not exists reference_solution text;
+        alter table public.assignments add column if not exists type_config text;
+
+        update public.assignments set assignment_type = 'STANDARD' where assignment_type is null;
+        update public.assignments set supported_languages = 'cpp' where supported_languages is null;
+        update public.assignments set testcase_samples = '' where testcase_samples is null;
+        update public.assignments set testcase_generation_strategy = 'MUTATION' where testcase_generation_strategy is null;
+        update public.assignments set testcase_seed_count = 0 where testcase_seed_count is null;
+        update public.assignments set generated_testcase_count = 0 where generated_testcase_count is null;
+        update public.assignments set problem_statement = '' where problem_statement is null;
+        update public.assignments set starter_code = '' where starter_code is null;
+        update public.assignments set reference_solution = '' where reference_solution is null;
+        update public.assignments set type_config = '' where type_config is null;
+
+        alter table public.assignments alter column assignment_type set default 'STANDARD';
+        alter table public.assignments alter column supported_languages set default 'cpp';
+        alter table public.assignments alter column testcase_samples set default '';
+        alter table public.assignments alter column testcase_generation_strategy set default 'MUTATION';
+        alter table public.assignments alter column testcase_seed_count set default 0;
+        alter table public.assignments alter column generated_testcase_count set default 0;
+        alter table public.assignments alter column problem_statement set default '';
+        alter table public.assignments alter column starter_code set default '';
+        alter table public.assignments alter column reference_solution set default '';
+        alter table public.assignments alter column type_config set default '';
+
+        alter table public.assignments alter column assignment_type set not null;
+        alter table public.assignments alter column testcase_generation_strategy set not null;
+        alter table public.assignments alter column testcase_seed_count set not null;
+        alter table public.assignments alter column generated_testcase_count set not null;
+    end if;
+end $$;
+@@
+
+do $$
+begin
+    if to_regclass('public.student_on_assignments') is not null then
+        alter table public.student_on_assignments add column if not exists class_section varchar(120);
+        update public.student_on_assignments set class_section = 'Default' where class_section is null or class_section = '';
+        alter table public.student_on_assignments alter column class_section set default 'Default';
+        alter table public.student_on_assignments alter column class_section set not null;
+    end if;
+end $$;
+@@
+
+do $$
+begin
     if to_regclass('public.recommendations') is not null then
         alter table public.recommendations drop column if exists recommended_testcases;
         alter table public.recommendations drop column if exists failed_testcases;

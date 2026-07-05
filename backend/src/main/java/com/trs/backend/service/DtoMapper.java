@@ -1,6 +1,7 @@
 package com.trs.backend.service;
 
 import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
@@ -50,6 +51,16 @@ public class DtoMapper {
         map.put("id", assignment.getId().toString());
         map.put("name", assignment.getName());
         map.put("description", assignment.getDescription());
+        map.put("assignment_type", assignment.getAssignmentType());
+        map.put("supported_languages", splitLanguages(assignment.getSupportedLanguages()));
+        map.put("testcase_samples", assignment.getTestcaseSamples());
+        map.put("testcase_generation_strategy", assignment.getTestcaseGenerationStrategy());
+        map.put("testcase_seed_count", assignment.getTestcaseSeedCount());
+        map.put("generated_testcase_count", assignment.getGeneratedTestcaseCount());
+        map.put("problem_statement", assignment.getProblemStatement());
+        map.put("starter_code", assignment.getStarterCode());
+        map.put("reference_solution", assignment.getReferenceSolution());
+        map.put("type_config", assignment.getTypeConfig());
         map.put("start_date", iso(assignment.getStartDate()));
         map.put("end_date", iso(assignment.getEndDate()));
         map.put("is_active", assignment.isActive());
@@ -106,5 +117,15 @@ public class DtoMapper {
 
     private static String iso(Object value) {
         return value == null ? null : value.toString();
+    }
+
+    private static java.util.List<String> splitLanguages(String value) {
+        if (value == null || value.isBlank()) {
+            return java.util.List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .toList();
     }
 }

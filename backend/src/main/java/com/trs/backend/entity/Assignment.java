@@ -22,6 +22,36 @@ public class Assignment extends BaseEntity {
     @Column(columnDefinition = "text")
     private String description;
 
+    @Column(name = "assignment_type", nullable = false, length = 50)
+    private String assignmentType = "STANDARD";
+
+    @Column(name = "supported_languages", columnDefinition = "text")
+    private String supportedLanguages = "cpp";
+
+    @Column(name = "testcase_samples", columnDefinition = "text")
+    private String testcaseSamples = "";
+
+    @Column(name = "testcase_generation_strategy", nullable = false, length = 50)
+    private String testcaseGenerationStrategy = "MUTATION";
+
+    @Column(name = "testcase_seed_count", nullable = false)
+    private Integer testcaseSeedCount = 0;
+
+    @Column(name = "generated_testcase_count", nullable = false)
+    private Integer generatedTestcaseCount = 0;
+
+    @Column(name = "problem_statement", columnDefinition = "text")
+    private String problemStatement = "";
+
+    @Column(name = "starter_code", columnDefinition = "text")
+    private String starterCode = "";
+
+    @Column(name = "reference_solution", columnDefinition = "text")
+    private String referenceSolution = "";
+
+    @Column(name = "type_config", columnDefinition = "text")
+    private String typeConfig = "";
+
     @Column(name = "start_date", nullable = false)
     private OffsetDateTime startDate;
 
@@ -49,6 +79,86 @@ public class Assignment extends BaseEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getAssignmentType() {
+        return assignmentType;
+    }
+
+    public void setAssignmentType(String assignmentType) {
+        this.assignmentType = assignmentType;
+    }
+
+    public String getSupportedLanguages() {
+        return supportedLanguages;
+    }
+
+    public void setSupportedLanguages(String supportedLanguages) {
+        this.supportedLanguages = supportedLanguages;
+    }
+
+    public String getTestcaseSamples() {
+        return testcaseSamples;
+    }
+
+    public void setTestcaseSamples(String testcaseSamples) {
+        this.testcaseSamples = testcaseSamples;
+    }
+
+    public String getTestcaseGenerationStrategy() {
+        return testcaseGenerationStrategy;
+    }
+
+    public void setTestcaseGenerationStrategy(String testcaseGenerationStrategy) {
+        this.testcaseGenerationStrategy = testcaseGenerationStrategy;
+    }
+
+    public Integer getTestcaseSeedCount() {
+        return testcaseSeedCount;
+    }
+
+    public void setTestcaseSeedCount(Integer testcaseSeedCount) {
+        this.testcaseSeedCount = testcaseSeedCount;
+    }
+
+    public Integer getGeneratedTestcaseCount() {
+        return generatedTestcaseCount;
+    }
+
+    public void setGeneratedTestcaseCount(Integer generatedTestcaseCount) {
+        this.generatedTestcaseCount = generatedTestcaseCount;
+    }
+
+    public String getProblemStatement() {
+        return problemStatement;
+    }
+
+    public void setProblemStatement(String problemStatement) {
+        this.problemStatement = problemStatement;
+    }
+
+    public String getStarterCode() {
+        return starterCode;
+    }
+
+    public void setStarterCode(String starterCode) {
+        this.starterCode = starterCode;
+    }
+
+    public String getReferenceSolution() {
+        return referenceSolution;
+    }
+
+    public void setReferenceSolution(String referenceSolution) {
+        this.referenceSolution = referenceSolution;
+    }
+
+    public String getTypeConfig() {
+        return typeConfig;
+    }
+
+    public void setTypeConfig(String typeConfig) {
+        this.typeConfig = typeConfig;
     }
 
     public OffsetDateTime getStartDate() {
