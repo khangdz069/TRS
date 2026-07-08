@@ -69,6 +69,15 @@ interface EncodedSubmissionFile {
   encoding: "base64";
 }
 
+type StudentTab = "assignments" | "submit" | "history";
+
+const STUDENT_ACTIVE_TAB_KEY = "trs_student_active_tab";
+const STUDENT_SELECTED_ASSIGNMENT_KEY = "trs_student_selected_assignment_id";
+const STUDENT_SELECTED_SUBMISSION_KEY = "trs_student_selected_submission_id";
+
+const isStudentTab = (value: string | null): value is StudentTab =>
+  value === "assignments" || value === "submit" || value === "history";
+
 const PUBLIC_TESTCASE_COUNT = 10;
 const TESTCASE_IDS = [
   ...Array.from({ length: 10 }, (_, index) => 1001 + index),
@@ -172,7 +181,10 @@ export default function StudentDashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activeTab, setActiveTab] = useState<"assignments" | "submit" | "history">("assignments");
+  const [activeTab, setActiveTab] = useState<StudentTab>("assignments");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [assignmentQuery, setAssignmentQuery] = useState("");
+  const [assignmentStatusFilter, setAssignmentStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
   
   // Data States
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -206,9 +218,11 @@ export default function StudentDashboard() {
   const [isLoadingSubs, setIsLoadingSubs] = useState(false);
   const [studentName, setStudentName] = useState("Sinh viên");
   const [isMounted, setIsMounted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
 
   useEffect(() => {
     setIsMounted(true);
+    setCurrentTime(Date.now());
     // Auth Check
     const token = typeof window !== "undefined" ? localStorage.getItem("trs_token") : null;
     const user = typeof window !== "undefined" ? localStorage.getItem("trs_user") : null;
@@ -221,9 +235,33 @@ export default function StudentDashboard() {
       router.push("/teacher");
       return;
     }
+    const savedTab = localStorage.getItem(STUDENT_ACTIVE_TAB_KEY);
+    if (isStudentTab(savedTab)) {
+      setActiveTab(savedTab);
+    }
     setStudentName(parsedUser.name || "Sinh viên");
     fetchAssignments(token);
   }, []);
+
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem(STUDENT_ACTIVE_TAB_KEY, activeTab);
+    }
+  }, [activeTab, isMounted]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    if (selectedAsm) {
+      localStorage.setItem(STUDENT_SELECTED_ASSIGNMENT_KEY, selectedAsm.id);
+    }
+  }, [selectedAsm, isMounted]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    if (selectedSubmission) {
+      localStorage.setItem(STUDENT_SELECTED_SUBMISSION_KEY, selectedSubmission.id);
+    }
+  }, [selectedSubmission, isMounted]);
 
   const fetchAssignments = async (token: string) => {
     setIsLoadingAsms(true);
@@ -232,10 +270,11 @@ export default function StudentDashboard() {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (response.ok) {
-        const data = await response.json();
+        const data: Assignment[] = await response.json();
         setAssignments(data);
         if (data.length > 0) {
-          setSelectedAsm(data[0]);
+          const savedAssignmentId = localStorage.getItem(STUDENT_SELECTED_ASSIGNMENT_KEY);
+          setSelectedAsm(data.find((assignment) => assignment.id === savedAssignmentId) || data[0]);
         }
       }
     } catch (err) {
@@ -245,7 +284,7 @@ export default function StudentDashboard() {
     }
   };
 
-  const fetchSubmissions = async (asmId: string) => {
+  const fetchSubmissions = async (asmId: string, options?: { preferNewest?: boolean }) => {
     const token = localStorage.getItem("trs_token");
     if (!token || !asmId) return;
 
@@ -255,11 +294,11 @@ export default function StudentDashboard() {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (response.ok) {
-        const data = await response.json();
+        const data: Submission[] = await response.json();
         setSubmissions(data);
         if (data.length > 0) {
-          // Select newest submission
-          setSelectedSubmission(data[0]);
+          const savedSubmissionId = options?.preferNewest ? null : localStorage.getItem(STUDENT_SELECTED_SUBMISSION_KEY);
+          setSelectedSubmission(data.find((submission) => submission.id === savedSubmissionId) || data[0]);
         } else {
           setSelectedSubmission(null);
           setRecommendation(null);
@@ -444,7 +483,7 @@ export default function StudentDashboard() {
         if (fileInputRef.current) fileInputRef.current.value = "";
         
         // Refresh submissions
-        fetchSubmissions(selectedAsm.id);
+        fetchSubmissions(selectedAsm.id, { preferNewest: true });
         setActiveTab("history");
       } else {
         setSubmitError(resData.error || `Nộp bài thất bại. Mã lỗi HTTP ${response.status}.`);
@@ -493,6 +532,69 @@ export default function StudentDashboard() {
     localStorage.clear();
     router.push("/login");
   };
+
+  const getAssignmentStatus = (assignment: Assignment) => {
+    if (!assignment.end_date) return "OPEN";
+    const endTime = new Date(assignment.end_date).getTime();
+    if (!Number.isFinite(endTime)) return "OPEN";
+    return endTime >= currentTime ? "OPEN" : "CLOSED";
+  };
+
+  const getAssignmentDueInfo = (assignment: Assignment) => {
+    if (!assignment.end_date) {
+      return {
+        dateLabel: "Không giới hạn",
+        helper: "Luôn nhận bài nộp",
+      };
+    }
+
+    const endTime = new Date(assignment.end_date).getTime();
+    if (!Number.isFinite(endTime)) {
+      return {
+        dateLabel: "Không giới hạn",
+        helper: "Chưa có hạn nộp hợp lệ",
+      };
+    }
+
+    const dateLabel = isMounted
+      ? new Date(assignment.end_date).toLocaleString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "";
+    const diffMs = endTime - currentTime;
+    if (diffMs < 0) {
+      return {
+        dateLabel,
+        helper: "Đã hết hạn",
+      };
+    }
+
+    const diffDays = Math.ceil(diffMs / 86400000);
+    return {
+      dateLabel,
+      helper: diffDays <= 1 ? "Còn hôm nay" : `Còn ${diffDays} ngày`,
+    };
+  };
+
+  const assignmentSearchTerm = assignmentQuery.trim().toLowerCase();
+  const filteredAssignments = assignments.filter((assignment) => {
+    const status = getAssignmentStatus(assignment);
+    const matchesStatus = assignmentStatusFilter === "ALL" || status === assignmentStatusFilter;
+    const searchableText = [
+      assignment.name,
+      assignment.description,
+      assignment.author_name,
+      assignment.id,
+    ].join(" ").toLowerCase();
+
+    return matchesStatus && (!assignmentSearchTerm || searchableText.includes(assignmentSearchTerm));
+  });
+  const openAssignmentCount = assignments.filter((assignment) => getAssignmentStatus(assignment) === "OPEN").length;
+  const closedAssignmentCount = assignments.length - openAssignmentCount;
 
   const getStatusMessage = (recStatus: string) => {
     switch (recStatus) {
@@ -560,63 +662,81 @@ export default function StudentDashboard() {
         };
       })
     : [];
-  const recommendationTableTitle = recommendation?.status === "PREVIOUS_TESTCASE_NOT_COMPLETED"
-    ? "Bảng 2: 3 testcase gợi ý lần trước"
-    : "Bảng 2: 3 testcase gợi ý";
-  const recommendationTableDescription = recommendation?.status === "PREVIOUS_TESTCASE_NOT_COMPLETED"
-    ? "Các dòng màu đỏ là testcase gợi ý lần trước vẫn chưa đúng ở bài nộp hiện tại."
-    : "Các testcase hệ thống chọn để bạn ưu tiên đối chiếu và sửa lỗi.";
-
   const getTestcaseRowStyle = (passed: boolean): CSSProperties => ({
-    background: passed ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
+    background: passed ? "hsl(154 68% 96%)" : "hsl(0 85% 98%)",
   });
 
   const renderTestcaseTable = (
     rows: TestcaseTableRow[],
-    options?: { warningBackground?: boolean },
+    options?: { warningBackground?: boolean; compact?: "result" | "recommendation" },
   ) => (
     <div
+      className="student-testcase-table-wrap"
       style={{
         overflowX: "auto",
         border: options?.warningBackground ? "1px solid rgba(245, 158, 11, 0.55)" : "1px solid hsl(var(--border-color))",
         borderRadius: "var(--radius-sm)",
-        background: options?.warningBackground ? "rgba(245, 158, 11, 0.12)" : "transparent",
+        background: options?.warningBackground ? "hsl(42 100% 96%)" : "transparent",
       }}
     >
-      <table className="mock-table" style={{ margin: 0, minWidth: "920px" }}>
+      <table className={`mock-table ${options?.compact ? "student-testcase-table compact" : ""}`} style={{ margin: 0, minWidth: options?.compact ? "520px" : "920px" }}>
         <thead>
-          <tr>
-            <th>Mã TC</th>
-            <th>Tham số truyền vào</th>
-            <th>Output</th>
-            <th>Kết quả mong muốn</th>
-            <th>Kết quả real</th>
-            <th>Status</th>
-          </tr>
+          {options?.compact ? (
+            <tr>
+              <th>TC</th>
+              <th>{options.compact === "recommendation" ? "Tham số cần thử" : "Tham số"}</th>
+              <th>{options.compact === "recommendation" ? "Output" : "Kết quả"}</th>
+            </tr>
+          ) : (
+            <tr>
+              <th>Mã TC</th>
+              <th>Tham số truyền vào</th>
+              <th>Output</th>
+              <th>Kết quả mong muốn</th>
+              <th>Kết quả real</th>
+              <th>Status</th>
+            </tr>
+          )}
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.id} style={getTestcaseRowStyle(row.passed)}>
-              <td style={{ fontFamily: "var(--font-mono)", fontWeight: "bold", color: "hsl(var(--color-primary))", whiteSpace: "nowrap" }}>
-                #{row.id}
-              </td>
-              <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}>
-                <code>{row.parameters}</code>
-              </td>
-              <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}>
-                {row.output}
-              </td>
-              <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
-                {row.expected_output}
-              </td>
-              <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
-                {row.real_output}
-              </td>
-              <td>
-                <span className={`mock-badge ${row.passed ? "success" : "danger"}`}>
-                  {row.status}
-                </span>
-              </td>
+            <tr key={row.id} style={options?.compact === "recommendation" ? undefined : getTestcaseRowStyle(row.passed)}>
+              {options?.compact ? (
+                <>
+                  <td style={{ fontFamily: "var(--font-mono)", fontWeight: "bold", color: "hsl(var(--color-primary))", whiteSpace: "nowrap" }}>#{row.id}</td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.84rem" }}><code>{row.parameters}</code></td>
+                  <td>
+                    {options.compact === "recommendation" ? (
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.84rem" }}>{row.output}</span>
+                    ) : (
+                      <span className={`mock-badge ${row.passed ? "success" : "danger"}`}>{row.status}</span>
+                    )}
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td style={{ fontFamily: "var(--font-mono)", fontWeight: "bold", color: "hsl(var(--color-primary))", whiteSpace: "nowrap" }}>
+                    #{row.id}
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}>
+                    <code>{row.parameters}</code>
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem" }}>
+                    {row.output}
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
+                    {row.expected_output}
+                  </td>
+                  <td style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
+                    {row.real_output}
+                  </td>
+                  <td>
+                    <span className={`mock-badge ${row.passed ? "success" : "danger"}`}>
+                      {row.status}
+                    </span>
+                  </td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>
@@ -646,59 +766,205 @@ export default function StudentDashboard() {
 
       <div className="sidebar-layout">
         {/* Sidebar Nav */}
-        <aside className="sidebar">
-          <div className="sidebar-title">Menu Nộp Bài</div>
+        <aside className={`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
+          <div className="sidebar-top">
+            <button
+              type="button"
+              className="sidebar-toggle"
+              onClick={() => setIsSidebarCollapsed((current) => !current)}
+              aria-label={isSidebarCollapsed ? "Mở rộng menu" : "Thu gọn menu"}
+              aria-pressed={isSidebarCollapsed}
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+            <div className="sidebar-title">Menu Nộp Bài</div>
+          </div>
           <nav className="sidebar-nav">
-            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")}>
-              Bài tập lớn của tôi
+            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Bài tập lớn của tôi">
+              <span className="sidebar-icon assignment" aria-hidden="true"></span>
+              <span className="sidebar-label">Bài tập lớn của tôi</span>
             </button>
-            <button className={`sidebar-link ${activeTab === "submit" ? "active" : ""}`} onClick={() => setActiveTab("submit")} disabled={!selectedAsm}>
-              Nộp bài giải
-            </button>
-            <button className={`sidebar-link ${activeTab === "history" ? "active" : ""}`} onClick={() => setActiveTab("history")} disabled={!selectedAsm}>
-              Lịch sử nộp & Gợi ý
-            </button>
+            {selectedAsm && (
+              <div className="sidebar-assignment-subnav">
+                <div className="sidebar-selected-assignment" title={selectedAsm.name}>
+                  <span className="sidebar-selected-kicker">Bài đang chọn</span>
+                  <strong>{selectedAsm.name}</strong>
+                </div>
+                <button className={`sidebar-sub-link ${activeTab === "submit" ? "active" : ""}`} onClick={() => setActiveTab("submit")} title="Nộp bài giải">
+                  <span className="sidebar-icon submit" aria-hidden="true"></span>
+                  <span className="sidebar-label">Nộp bài giải</span>
+                </button>
+                <button className={`sidebar-sub-link ${activeTab === "history" ? "active" : ""}`} onClick={() => setActiveTab("history")} title="Lịch sử nộp & Gợi ý">
+                  <span className="sidebar-icon history" aria-hidden="true"></span>
+                  <span className="sidebar-label">Lịch sử & gợi ý</span>
+                </button>
+              </div>
+            )}
           </nav>
         </aside>
 
         {/* Main Content */}
         <main className="content-area">
           {activeTab === "assignments" && (
-            <div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Bài tập lớn tham gia</h1>
-              <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Danh sách các bài tập lớn môn học bạn được phân quyền nộp bài và khảo sát testcase.
-              </p>
+            <div className="student-assignment-page">
+              <div className="student-assignment-toolbar">
+                <div>
+                  <span className="student-assignment-eyebrow">Không gian học tập</span>
+                  <h1>Bài tập lớn</h1>
+                </div>
+                <div className="student-assignment-stats" aria-label="Tổng quan bài tập">
+                  <div>
+                    <span>Tất cả</span>
+                    <strong>{assignments.length}</strong>
+                  </div>
+                  <div>
+                    <span>Đang mở</span>
+                    <strong>{openAssignmentCount}</strong>
+                  </div>
+                  <div>
+                    <span>Đóng</span>
+                    <strong>{closedAssignmentCount}</strong>
+                  </div>
+                </div>
+              </div>
 
-              {isLoadingAsms && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải bài tập...</p>}
+              {isLoadingAsms && <div className="assignment-list-state">Đang tải bài tập...</div>}
               {!isLoadingAsms && assignments.length === 0 && (
                 <div className="tech-panel" style={{ textAlign: "center", padding: "3rem" }}>
                   <p style={{ color: "hsl(var(--text-muted))" }}>Bạn chưa được đăng ký vào bài tập lớn nào.</p>
                 </div>
               )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                {assignments.map((asm) => (
-                  <div
-                    key={asm.id}
-                    className={`tech-panel ${selectedAsm?.id === asm.id ? "active-border" : ""}`}
-                    onClick={() => setSelectedAsm(asm)}
-                    style={{ cursor: "pointer", marginTop: "0", border: selectedAsm?.id === asm.id ? "1px solid hsl(var(--color-primary))" : "" }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                      <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: selectedAsm?.id === asm.id ? "hsl(var(--color-primary))" : "#fff" }}>{asm.name}</h3>
-                      <span className="mock-badge warning" style={{ fontFamily: "var(--font-mono)" }}>
-                        Hạn nộp: {isMounted && asm.end_date ? new Date(asm.end_date).toLocaleString('vi-VN') : "Không giới hạn"}
-                      </span>
+              {!isLoadingAsms && assignments.length > 0 && (
+                <div className="student-assignment-workspace">
+                  <section className="student-assignment-list-panel" aria-label="Danh sách bài tập lớn tham gia">
+                    <div className="student-assignment-list-header">
+                      <div>
+                        <h2>Bài</h2>
+                        <p>{filteredAssignments.length}/{assignments.length}</p>
+                      </div>
                     </div>
-                    <p style={{ color: "hsl(var(--text-secondary))", fontSize: "0.95rem", marginBottom: "1rem" }}>{asm.description}</p>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", color: "hsl(var(--text-muted))" }}>
-                      <span>Giảng viên: {asm.author_name}</span>
-                      {selectedAsm?.id === asm.id && <span style={{ color: "hsl(var(--color-primary))", fontWeight: "600" }}>Đã chọn</span>}
+
+                    <div className="student-assignment-list-tools">
+                      <label className="assignment-search-control">
+                        <span aria-hidden="true" className="assignment-search-icon"></span>
+                        <input
+                          placeholder="Tìm bài"
+                          value={assignmentQuery}
+                          onChange={(e) => setAssignmentQuery(e.target.value)}
+                        />
+                        {assignmentQuery && (
+                          <button type="button" onClick={() => setAssignmentQuery("")} aria-label="Xóa tìm kiếm">
+                            ×
+                          </button>
+                        )}
+                      </label>
+                      <div className="student-assignment-filter-tabs" aria-label="Lọc bài tập theo trạng thái">
+                        <button
+                          type="button"
+                          className={assignmentStatusFilter === "ALL" ? "active" : ""}
+                          onClick={() => setAssignmentStatusFilter("ALL")}
+                        >
+                          Tất cả <span>{assignments.length}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={assignmentStatusFilter === "OPEN" ? "active" : ""}
+                          onClick={() => setAssignmentStatusFilter("OPEN")}
+                        >
+                          Mở <span>{openAssignmentCount}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={assignmentStatusFilter === "CLOSED" ? "active" : ""}
+                          onClick={() => setAssignmentStatusFilter("CLOSED")}
+                        >
+                          Đóng <span>{closedAssignmentCount}</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+
+                    <div className="student-assignment-list-scroll">
+                      {filteredAssignments.length === 0 && (
+                        <div className="assignment-list-state">Không tìm thấy bài tập phù hợp.</div>
+                      )}
+                      {filteredAssignments.map((asm) => {
+                        const status = getAssignmentStatus(asm);
+                        const isSelected = selectedAsm?.id === asm.id;
+                        const dueInfo = getAssignmentDueInfo(asm);
+                        return (
+                          <button
+                            key={asm.id}
+                            type="button"
+                            className={`student-assignment-row ${isSelected ? "selected" : ""}`}
+                            onClick={() => setSelectedAsm(asm)}
+                          >
+                            <span className={`student-assignment-status-dot ${status.toLowerCase()}`} aria-hidden="true"></span>
+                            <span className="student-assignment-row-main">
+                              <strong>{asm.name}</strong>
+                            </span>
+                            <span className={`student-assignment-row-state ${status.toLowerCase()}`}>
+                              {dueInfo.helper}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="student-assignment-detail-card" aria-label="Chi tiết bài tập lớn đang chọn">
+                    {selectedAsm ? (
+                      (() => {
+                        const selectedStatus = getAssignmentStatus(selectedAsm);
+                        const selectedDueInfo = getAssignmentDueInfo(selectedAsm);
+                        return (
+                      <div className="student-assignment-detail-inner">
+                        <div className="student-assignment-detail-kicker">
+                          <span className={`student-assignment-row-state ${selectedStatus.toLowerCase()}`}>
+                            {selectedStatus === "OPEN" ? "Đang nhận bài" : "Đã đóng"}
+                          </span>
+                        </div>
+
+                        <div className="student-assignment-detail-header">
+                          <div>
+                            <h2>{selectedAsm.name}</h2>
+                            {selectedAsm.description && <p>{selectedAsm.description}</p>}
+                          </div>
+                        </div>
+
+                        <div className="student-assignment-meta-grid">
+                          <div>
+                            <span>Giảng viên</span>
+                            <strong>{selectedAsm.author_name || "Chưa rõ"}</strong>
+                          </div>
+                          <div>
+                            <span>Hạn nộp</span>
+                            <strong>{selectedDueInfo.dateLabel}</strong>
+                          </div>
+                        </div>
+
+                        <div className="student-assignment-actions">
+                          <button className="btn btn-primary" onClick={() => setActiveTab("submit")} disabled={selectedStatus !== "OPEN"}>
+                            Nộp bài giải
+                          </button>
+                          <button className="btn btn-secondary" onClick={() => setActiveTab("history")}>
+                            Lịch sử & gợi ý
+                          </button>
+                        </div>
+                      </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="student-assignment-empty">
+                        <h2>Chọn một bài tập</h2>
+                        <p>Thông tin chi tiết và thao tác nộp bài sẽ hiện ở đây.</p>
+                      </div>
+                    )}
+                  </section>
+                </div>
+              )}
             </div>
           )}
 
@@ -709,7 +975,7 @@ export default function StudentDashboard() {
                 Nộp mã nguồn cho bài tập: <strong style={{ color: "hsl(var(--color-primary))" }}>{selectedAsm.name}</strong>
               </p>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem" }}>
+              <div className="submit-grid">
                 {/* Method 1: Paste Code Editor */}
                 <div className="tech-panel" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
                   <h3 className="tech-panel-title">Phương án 1: Trình soạn thảo mã</h3>
@@ -812,152 +1078,162 @@ export default function StudentDashboard() {
           )}
 
           {activeTab === "history" && selectedAsm && (
-            <div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Lịch sử nộp & Nhận gợi ý</h1>
-              <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Xem chi tiết lịch sử thực thi và kết quả khuyến nghị testcase cho bài tập: <strong>{selectedAsm.name}</strong>
-              </p>
-
-              <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: "2rem" }}>
-                {/* Submission Select Side */}
+            <div className="student-history-page">
+              <div className="student-history-toolbar">
                 <div>
-                  <h4 style={{ fontWeight: "700", marginBottom: "1rem" }}>Chọn lần nộp</h4>
-                  {isLoadingSubs && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải lịch sử...</p>}
+                  <h1>Lịch sử & gợi ý</h1>
+                  <p>Bài tập: <strong>{selectedAsm.name}</strong></p>
+                </div>
+                {selectedSubmission && (
+                  <span className={`mock-badge ${
+                    selectedSubmission.status === "SUCCESS" ? "success" :
+                    selectedSubmission.status === "FAILED" ? "danger" : "warning"
+                  }`}>
+                    {selectedSubmission.status}
+                  </span>
+                )}
+              </div>
+              <div className="history-grid">
+                <aside className="submission-list-panel" aria-label="Danh sách lần nộp">
+                  <div className="submission-list-header">
+                    <h2>Lần nộp</h2>
+                    <span>{submissions.length}</span>
+                  </div>
+                  {isLoadingSubs && <div className="submission-list-state">Đang tải lịch sử...</div>}
                   {!isLoadingSubs && submissions.length === 0 && (
-                    <p style={{ color: "hsl(var(--text-muted))" }}>Chưa có lần nộp nào.</p>
+                    <div className="submission-list-state">Chưa có lần nộp nào.</div>
                   )}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  <div className="submission-list-stack">
                     {submissions.map((sub, idx) => {
                       const submissionIndex = submissions.length - idx;
                       return (
                         <button
                           key={sub.id}
+                          type="button"
                           onClick={() => setSelectedSubmission(sub)}
-                          className={`sidebar-link ${selectedSubmission?.id === sub.id ? "active" : ""}`}
-                          style={{
-                            textAlign: "left",
-                            padding: "0.75rem 1rem",
-                            width: "100%",
-                            border: "none",
-                            borderRadius: "var(--radius-sm)",
-                            background: selectedSubmission?.id === sub.id ? "rgba(255,255,255,0.05)" : "transparent",
-                            cursor: "pointer"
-                          }}
+                          className={`submission-list-item ${selectedSubmission?.id === sub.id ? "selected" : ""}`}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
-                            <span>Lần nộp #{submissionIndex}</span>
-                            <span style={{
-                              color: sub.status === "SUCCESS" ? "hsl(var(--color-success))" :
-                                     sub.status === "FAILED" ? "rgb(239, 68, 68)" : "yellow"
-                            }}>{sub.status}</span>
-                          </div>
-                          <div style={{ fontSize: "0.75rem", color: "hsl(var(--text-muted))", marginTop: "2px" }}>
+                          <span>
+                            <strong>#{submissionIndex}</strong>
                             {isMounted ? `${new Date(sub.created_at).toLocaleTimeString()} - ${new Date(sub.created_at).toLocaleDateString()}` : ""}
-                          </div>
+                          </span>
+                          <span className={`mock-badge ${sub.status === "SUCCESS" ? "success" : sub.status === "FAILED" ? "danger" : "warning"}`}>
+                            {sub.status}
+                          </span>
                         </button>
                       );
                     })}
                   </div>
-                </div>
+                </aside>
 
-                {/* Details Side */}
-                {selectedSubmission && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                    {/* Grader Output Log */}
-                    <div className="tech-panel" style={{ marginTop: "0" }}>
-                      <h3 className="tech-panel-title">Chi tiết lần chấm bài</h3>
-                      <div style={{ display: "flex", gap: "2rem", marginBottom: "1rem" }}>
-                        <div>Trạng thái: <strong style={{ color: selectedSubmission.status === "SUCCESS" ? "hsl(var(--color-success))" : "red" }}>{selectedSubmission.status}</strong></div>
+                {selectedSubmission ? (
+                  <div className="student-history-detail">
+                    <section className="student-history-card">
+                      <div className="student-card-header">
+                        <div>
+                          <h3>Kết quả chấm</h3>
+                          <p>{isMounted ? new Date(selectedSubmission.created_at).toLocaleString("vi-VN") : ""}</p>
+                        </div>
+                      </div>
+
+                      <div className="student-result-stats">
+                        <div className="student-stat-tile">
+                          <span>Trạng thái</span>
+                          <strong className={
+                            selectedSubmission.status === "SUCCESS" ? "success" :
+                            selectedSubmission.status === "FAILED" ? "danger" : "warning"
+                          }>
+                            {selectedSubmission.status}
+                          </strong>
+                        </div>
                         {totalCount > 0 && (
-                          <div>Đạt: <strong>{passedCount}/{totalCount} testcase</strong></div>
+                          <div className="student-stat-tile">
+                            <span>Testcase đạt</span>
+                            <strong>{passedCount}/{totalCount}</strong>
+                          </div>
                         )}
                       </div>
                       
                       {selectedSubmission.compile_error && (
-                        <div style={{ background: "#1a0b0b", borderLeft: "4px solid red", padding: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.85rem", whiteSpace: "pre-wrap", color: "#ff8888", marginBottom: "1rem" }}>
-                          <strong>Compile Error:</strong><br />
+                        <div className="code-output student-error-output">
+                          <strong>Compile Error</strong><br />
                           {selectedSubmission.compile_error}
                         </div>
                       )}
 
                       {selectedSubmission.runtime_error && (
-                        <div style={{ background: "#1a0b0b", borderLeft: "4px solid red", padding: "1rem", fontFamily: "var(--font-mono)", fontSize: "0.85rem", whiteSpace: "pre-wrap", color: "#ff8888", marginBottom: "1rem" }}>
-                          <strong>Runtime Error:</strong><br />
+                        <div className="code-output student-error-output">
+                          <strong>Runtime Error</strong><br />
                           {selectedSubmission.runtime_error}
                         </div>
                       )}
 
                       {publicRows.length > 0 && (
-                        <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", marginBottom: "0.75rem" }}>
-                            <div>
-                              <h4 style={{ fontWeight: 700, marginBottom: "0.25rem" }}>Bảng 1: 10 testcase đại diện</h4>
-                              <div style={{ fontSize: "0.85rem", color: "hsl(var(--text-secondary))" }}>
-                                Chỉ hiển thị 10 testcase đầu tiên, các testcase còn lại được ẩn.
-                              </div>
-                            </div>
+                        <div className="compact-testcase-section">
+                          <div className="compact-section-heading">
+                            <h4>Testcase mẫu</h4>
                             {publicTableHasHiddenFailures && (
                               <span className="mock-badge warning">
-                                10 TC đầu đúng, TC ẩn còn sai
+                                Còn lỗi ẩn
                               </span>
                             )}
                           </div>
-                          {renderTestcaseTable(publicRows, { warningBackground: publicTableHasHiddenFailures })}
+                          {renderTestcaseTable(publicRows, { warningBackground: publicTableHasHiddenFailures, compact: "result" })}
                         </div>
                       )}
-                    </div>
+                    </section>
 
-                    {/* Recommendation details */}
                     {recommendation && (
-                      <div className="tech-panel" style={{ marginTop: "0" }}>
-                        <h3 className="tech-panel-title">Gợi ý testcase khuyến nghị</h3>
-                        <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "1rem" }}>
-                          {getStatusMessage(recommendation.status)}
-                        </p>
+                      <section className="student-history-card">
+                        <div className="student-card-header">
+                          <div>
+                            <h3>Gợi ý testcase</h3>
+                            <p>{getStatusMessage(recommendation.status)}</p>
+                          </div>
+                          <span className={`mock-badge ${
+                            recommendation.status === "READY" ? "success" :
+                            recommendation.status === "FAILED" ? "danger" : "warning"
+                          }`}>
+                            {recommendation.status}
+                          </span>
+                        </div>
 
                         {canShowRecommendationRows && recommendationRows.length > 0 && (
-                          <div style={{ marginBottom: "1.5rem" }}>
-                            <div style={{ marginBottom: "0.75rem" }}>
-                              <h4 style={{ fontWeight: 700, marginBottom: "0.25rem" }}>{recommendationTableTitle}</h4>
-                              <div style={{ fontSize: "0.85rem", color: "hsl(var(--text-secondary))" }}>
-                                {recommendationTableDescription}
-                              </div>
+                          <div className="compact-testcase-section">
+                            <div className="compact-section-heading">
+                              <h4>{recommendation.status === "PREVIOUS_TESTCASE_NOT_COMPLETED" ? "Cần hoàn thành trước" : "Nên thử tiếp"}</h4>
+                              <span className="panel-count-pill">{recommendationRows.length} TC</span>
                             </div>
-                            {renderTestcaseTable(recommendationRows)}
-                            <p style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))", marginTop: "0.75rem" }}>
-                              * Bạn hãy đối chiếu tham số vào, kết quả thực tế (kết quả của bạn) và kết quả mong đợi để tìm lỗi sai trong mã nguồn.
-                            </p>
+                            {renderTestcaseTable(recommendationRows, { compact: "recommendation" })}
                           </div>
                         )}
 
-                        {/* Recommendation Feedback Form */}
                         {canShowFeedbackForm && (
-                          <form onSubmit={handleFeedbackSubmit} style={{ borderTop: "1px solid hsl(var(--border-color))", paddingTop: "1.5rem", marginTop: "1rem" }}>
-                            <h4 style={{ fontWeight: "700", marginBottom: "1rem" }}>
+                          <form onSubmit={handleFeedbackSubmit} className="student-feedback-form">
+                            <h4>
                               {recommendation.status === "NO_TESTCASE" ? "Khảo sát sau khi chấm bài" : "Khảo sát phản hồi gợi ý"}
                             </h4>
                             
-                            <div className="form-group" style={{ marginBottom: "1rem" }}>
+                            <div className="form-group">
                               <label className="form-label">
-                                {recommendation.status === "NO_TESTCASE" ? "Mức độ hài lòng với kết quả chấm bài (1-5 sao)" : "Mức độ hữu ích của gợi ý này (1-5 sao)"}
+                                {recommendation.status === "NO_TESTCASE" ? "Mức độ hài lòng" : "Mức độ hữu ích"}
                               </label>
                               <select
-                                className="form-control"
+                                className="form-control student-rating-select"
                                 value={formRating}
                                 onChange={(e) => setFormRating(Number(e.target.value))}
-                                style={{ maxWidth: "150px", background: "rgba(0,0,0,0.2)" }}
                               >
-                                <option value="5" style={{ background: "#222" }}>5 sao (Rất tốt)</option>
-                                <option value="4" style={{ background: "#222" }}>4 sao (Tốt)</option>
-                                <option value="3" style={{ background: "#222" }}>3 sao (Bình thường)</option>
-                                <option value="2" style={{ background: "#222" }}>2 sao (Kém)</option>
-                                <option value="1" style={{ background: "#222" }}>1 sao (Rất tệ)</option>
+                                <option value="5">5 sao (Rất tốt)</option>
+                                <option value="4">4 sao (Tốt)</option>
+                                <option value="3">3 sao (Bình thường)</option>
+                                <option value="2">2 sao (Kém)</option>
+                                <option value="1">1 sao (Rất tệ)</option>
                               </select>
                             </div>
 
-                            <div className="form-group" style={{ marginBottom: "1rem" }}>
+                            <div className="form-group">
                               <label className="form-label">
-                                {recommendation.status === "NO_TESTCASE" ? "Ý kiến đóng góp thêm" : "Ý kiến đóng góp thêm về testcase gợi ý"}
+                                Góp ý thêm
                               </label>
                               <textarea
                                 className="form-control"
@@ -969,18 +1245,23 @@ export default function StudentDashboard() {
                             </div>
 
                             <button type="submit" className="btn btn-primary">
-                              Gửi đánh giá phản hồi
+                              Gửi phản hồi
                             </button>
                           </form>
                         )}
 
                         {(recommendation.is_filled_form || formSubmitted) && (
-                          <div style={{ marginTop: "1rem", padding: "0.75rem", background: "rgba(16, 185, 129, 0.05)", border: "1px solid rgba(16, 185, 129, 0.15)", borderRadius: "var(--radius-sm)", color: "hsl(var(--color-success))", fontSize: "0.9rem" }}>
-                            Cảm ơn bạn đã gửi đánh giá phản hồi hữu ích cho lần gợi ý này!
+                          <div className="student-feedback-complete">
+                            Cảm ơn bạn đã gửi phản hồi.
                           </div>
                         )}
-                      </div>
+                      </section>
                     )}
+                  </div>
+                ) : (
+                  <div className="student-history-empty">
+                    <h2>Chọn một lần nộp</h2>
+                    <p>Kết quả chấm và gợi ý testcase sẽ hiện ở đây.</p>
                   </div>
                 )}
               </div>

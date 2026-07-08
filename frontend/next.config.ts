@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.BACKEND_URL || "http://backend:5102";
+const backendUrl = process.env.BACKEND_URL || "http://localhost:5102";
 
 const nextConfig: NextConfig = {
   turbopack: {

@@ -162,12 +162,17 @@ export default function TeacherDashboard() {
   const assignmentFileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<TeacherTab>("assignments");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
   const [user, setUser] = useState<TeacherUser | null>(null);
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState("");
+  const [assignmentQuery, setAssignmentQuery] = useState("");
+  const [assignmentTypeFilter, setAssignmentTypeFilter] = useState<"ALL" | AssignmentType>("ALL");
+  const [assignmentStatusFilter, setAssignmentStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
+  const [assignmentStatusNow, setAssignmentStatusNow] = useState<number | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [classRosters, setClassRosters] = useState<ClassRoster[]>([]);
   const [classSection, setClassSection] = useState("");
@@ -202,8 +207,60 @@ export default function TeacherDashboard() {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
   const selectedAssignment = assignments.find((assignment) => assignment.id === selectedAssignmentId) || null;
+  const assignmentTypeOptions = Array.from(
+    new Set(assignments.map((assignment) => assignment.assignment_type || "STANDARD"))
+  ) as AssignmentType[];
+  const getAssignmentStatus = (assignment: Assignment) => {
+    if (!assignment.end_date) return "OPEN";
+    if (assignmentStatusNow === null) return "OPEN";
+    const endTime = new Date(assignment.end_date).getTime();
+    return Number.isFinite(endTime) && endTime < assignmentStatusNow ? "CLOSED" : "OPEN";
+  };
+  const filteredAssignments = assignments.filter((assignment) => {
+    const query = assignmentQuery.trim().toLowerCase();
+    const searchable = [
+      assignment.name,
+      assignment.description,
+      assignment.author_name,
+      typeLabel(assignment.assignment_type),
+      languageLabel(assignment.supported_languages),
+      assignment.id,
+    ].join(" ").toLowerCase();
+    const matchesQuery = !query || searchable.includes(query);
+    const matchesType = assignmentTypeFilter === "ALL" || (assignment.assignment_type || "STANDARD") === assignmentTypeFilter;
+    const matchesStatus = assignmentStatusFilter === "ALL" || getAssignmentStatus(assignment) === assignmentStatusFilter;
+    return matchesQuery && matchesType && matchesStatus;
+  });
+  const openAssignmentCount = assignments.filter((assignment) => getAssignmentStatus(assignment) === "OPEN").length;
+  const closedAssignmentCount = assignments.length - openAssignmentCount;
+  const assignmentTypeCount = new Set(assignments.map((asm) => asm.assignment_type || "STANDARD")).size;
+  const languageCount = new Set(assignments.flatMap((asm) => asm.supported_languages || ["cpp"])).size;
+  const generatedTotal = assignments.reduce((sum, asm) => sum + (asm.generated_testcase_count || 0), 0);
+  const getAssignmentDueInfo = (assignment: Assignment) => {
+    if (!assignment.end_date) {
+      return { dateLabel: "Không giới hạn", helper: "Mở" };
+    }
+
+    const endTime = new Date(assignment.end_date).getTime();
+    if (!Number.isFinite(endTime) || assignmentStatusNow === null) {
+      return { dateLabel: "Không giới hạn", helper: "Mở" };
+    }
+
+    const dateLabel = new Date(assignment.end_date).toLocaleDateString("vi-VN");
+    const diffMs = endTime - assignmentStatusNow;
+    if (diffMs < 0) {
+      return { dateLabel, helper: "Đóng" };
+    }
+
+    const diffDays = Math.ceil(diffMs / 86400000);
+    return { dateLabel, helper: diffDays <= 1 ? "Hôm nay" : `${diffDays} ngày` };
+  };
   const seedCount = countSeedTestcases(sampleTestcases);
   const generatedPreview = generateTestcases(sampleTestcases, Math.min(generatedCount, 8), generationStrategy);
+
+  useEffect(() => {
+    setAssignmentStatusNow(Date.now());
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("trs_token");
@@ -499,11 +556,11 @@ export default function TeacherDashboard() {
           <Link href="/" className="logo">
             TRS <span className="logo-badge">Rebuild</span>
           </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <div className="teacher-header-actions">
             <span style={{ fontSize: "0.9rem", color: "hsl(var(--text-secondary))" }}>
               Chào giảng viên: <strong>{user?.name || "Teacher"}</strong>
             </span>
-            <button onClick={logout} className="sys-status" style={{ background: "rgba(239, 68, 68, 0.1)", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.2)", textDecoration: "none", cursor: "pointer" }}>
+            <button onClick={logout} className="btn btn-danger">
               Đăng xuất
             </button>
           </div>
@@ -511,48 +568,361 @@ export default function TeacherDashboard() {
       </header>
 
       <div className="sidebar-layout">
-        <aside className="sidebar">
-          <div className="sidebar-title">Menu quản lý</div>
+        <aside className={`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
+          <div className="sidebar-top">
+            <button
+              type="button"
+              className="sidebar-toggle"
+              onClick={() => setIsSidebarCollapsed((current) => !current)}
+              aria-label={isSidebarCollapsed ? "Mở rộng menu" : "Thu gọn menu"}
+              aria-pressed={isSidebarCollapsed}
+            >
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+            <div className="sidebar-title">Menu quản lý</div>
+          </div>
           <nav className="sidebar-nav">
-            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")}>
-              Quản lý bài tập lớn
+            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Quản lý bài tập lớn">
+              <span className="sidebar-icon assignment" aria-hidden="true"></span>
+              <span className="sidebar-label">Quản lý bài tập lớn</span>
             </button>
-            <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "import" ? "active" : ""}`} onClick={() => setActiveTab("import")}>
-              Đăng ký sinh viên
+            <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "import" ? "active" : ""}`} onClick={() => setActiveTab("import")} title="Đăng ký sinh viên">
+              <span className="sidebar-icon import" aria-hidden="true"></span>
+              <span className="sidebar-label">Đăng ký sinh viên</span>
             </button>
-            <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "teachers" ? "active" : ""}`} onClick={() => setActiveTab("teachers")}>
-              Thêm giảng viên hợp tác
+            <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "teachers" ? "active" : ""}`} onClick={() => setActiveTab("teachers")} title="Thêm giảng viên hợp tác">
+              <span className="sidebar-icon teachers" aria-hidden="true"></span>
+              <span className="sidebar-label">Thêm giảng viên hợp tác</span>
             </button>
-            <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "students" ? "active" : ""}`} onClick={() => setActiveTab("students")}>
-              Danh sách sinh viên
+            <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "students" ? "active" : ""}`} onClick={() => setActiveTab("students")} title="Danh sách sinh viên">
+              <span className="sidebar-icon students" aria-hidden="true"></span>
+              <span className="sidebar-label">Danh sách sinh viên</span>
             </button>
-            <button className={`sidebar-link ${activeTab === "analytics" ? "active" : ""}`} onClick={() => setActiveTab("analytics")}>
-              Thống kê survey
+            <button className={`sidebar-link ${activeTab === "analytics" ? "active" : ""}`} onClick={() => setActiveTab("analytics")} title="Thống kê survey">
+              <span className="sidebar-icon analytics" aria-hidden="true"></span>
+              <span className="sidebar-label">Thống kê survey</span>
             </button>
           </nav>
         </aside>
 
         <main className="content-area">
           {activeTab === "assignments" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem" }}>
+            <div className="teacher-dashboard">
+              <div className="teacher-page-toolbar teacher-assignment-toolbar">
                 <div>
-                  <h1 style={{ fontSize: "1.75rem", fontWeight: 800 }}>Quản lý bài tập lớn</h1>
-                  <p style={{ color: "hsl(var(--text-secondary))" }}>Tạo mới, xem và chỉnh sửa các bài tập lớn lập trình trên hệ thống.</p>
+                  <span className="teacher-assignment-eyebrow">Assignment studio</span>
+                  <h1>Bài tập lớn</h1>
                 </div>
                 <button className="btn btn-primary" onClick={openCreateAssignment}>
-                  Thêm bài tập lớn
+                  Tạo bài tập
                 </button>
               </div>
 
-              <div className="teacher-metrics">
+              <section className="teacher-assignment-stats" aria-label="Tổng quan bài tập lớn">
+                <div>
+                  <span>Tất cả</span>
+                  <strong>{assignments.length}</strong>
+                </div>
+                <div>
+                  <span>Đang mở</span>
+                  <strong>{openAssignmentCount}</strong>
+                </div>
+                <div>
+                  <span>Đóng</span>
+                  <strong>{closedAssignmentCount}</strong>
+                </div>
+                <div>
+                  <span>TC sinh</span>
+                  <strong>{generatedTotal}</strong>
+                </div>
+              </section>
+
+              <section className="teacher-metrics-table-card" aria-label="Tổng quan bài tập lớn" style={{ display: "none" }}>
+                <div className="teacher-metrics-header">
+                  <div>
+                    <h2>Tổng quan bài tập</h2>
+                    <p>Các chỉ số chính của kho bài tập lớn.</p>
+                  </div>
+                </div>
+                <div className="teacher-metrics-chunks">
+                  <div className="teacher-metric-tile">
+                    <span>Tổng bài</span>
+                    <strong>{assignments.length}</strong>
+                    <small>Bài tập lớn đã tạo</small>
+                  </div>
+                  <div className="teacher-metric-tile">
+                    <span>Dạng bài</span>
+                    <strong>{assignmentTypeCount}</strong>
+                    <small>Loại bài đang dùng</small>
+                  </div>
+                  <div className="teacher-metric-tile">
+                    <span>Ngôn ngữ</span>
+                    <strong>{languageCount}</strong>
+                    <small>Ngôn ngữ hỗ trợ</small>
+                  </div>
+                  <div className="teacher-metric-tile">
+                    <span>TC sinh thêm</span>
+                    <strong>{generatedTotal}</strong>
+                    <small>Testcase generated</small>
+                  </div>
+                </div>
+              </section>
+
+              <div className="teacher-metrics teacher-metrics-grid-hidden">
                 <Metric label="Tổng bài" value={assignments.length} />
-                <Metric label="Dạng bài" value={new Set(assignments.map((asm) => asm.assignment_type || "STANDARD")).size} />
-                <Metric label="Ngôn ngữ" value={new Set(assignments.flatMap((asm) => asm.supported_languages || ["cpp"])).size} />
-                <Metric label="TC sinh thêm" value={assignments.reduce((sum, asm) => sum + (asm.generated_testcase_count || 0), 0)} />
+                <Metric label="Dạng bài" value={assignmentTypeCount} />
+                <Metric label="Ngôn ngữ" value={languageCount} />
+                <Metric label="TC sinh thêm" value={generatedTotal} />
               </div>
 
-              <div className="assignment-command-panel">
+              <div className="assignment-workbench teacher-assignment-workspace">
+                <section className="teacher-assignment-list-panel" aria-label="Danh sách bài tập lớn">
+                  <div className="teacher-assignment-list-header">
+                    <div>
+                      <h2>Danh sách</h2>
+                      <p>{filteredAssignments.length}/{assignments.length}</p>
+                    </div>
+                  </div>
+
+                  <div className="teacher-assignment-list-tools">
+                    <label className="assignment-search-control">
+                      <span aria-hidden="true" className="assignment-search-icon"></span>
+                      <input
+                        placeholder="Tìm bài"
+                        value={assignmentQuery}
+                        onChange={(e) => setAssignmentQuery(e.target.value)}
+                      />
+                      {assignmentQuery && (
+                        <button type="button" onClick={() => setAssignmentQuery("")} aria-label="Xóa tìm kiếm">
+                          ×
+                        </button>
+                      )}
+                    </label>
+                    <select
+                      className="assignment-filter-select"
+                      value={assignmentTypeFilter}
+                      onChange={(e) => setAssignmentTypeFilter(e.target.value as "ALL" | AssignmentType)}
+                    >
+                      <option value="ALL">Mọi dạng</option>
+                      {assignmentTypeOptions.map((type) => (
+                        <option key={type} value={type}>{typeLabel(type)}</option>
+                      ))}
+                    </select>
+                    <div className="teacher-assignment-filter-tabs" aria-label="Lọc bài tập theo trạng thái">
+                      <button
+                        type="button"
+                        className={assignmentStatusFilter === "ALL" ? "active" : ""}
+                        onClick={() => setAssignmentStatusFilter("ALL")}
+                      >
+                        Tất cả <span>{assignments.length}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={assignmentStatusFilter === "OPEN" ? "active" : ""}
+                        onClick={() => setAssignmentStatusFilter("OPEN")}
+                      >
+                        Mở <span>{openAssignmentCount}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={assignmentStatusFilter === "CLOSED" ? "active" : ""}
+                        onClick={() => setAssignmentStatusFilter("CLOSED")}
+                      >
+                        Đóng <span>{closedAssignmentCount}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="teacher-assignment-list-scroll">
+                    {isLoadingAsms && (
+                      <div className="assignment-list-state">Đang tải bài tập...</div>
+                    )}
+                    {!isLoadingAsms && filteredAssignments.length === 0 && (
+                      <div className="assignment-list-state">
+                        {assignments.length === 0 ? "Chưa có bài tập lớn nào." : "Không tìm thấy bài tập phù hợp."}
+                      </div>
+                    )}
+                    {!isLoadingAsms && filteredAssignments.map((asm) => {
+                      const isSelected = selectedAssignmentId === asm.id;
+                      const status = getAssignmentStatus(asm);
+                      const dueInfo = getAssignmentDueInfo(asm);
+                      return (
+                        <button
+                          key={asm.id}
+                          type="button"
+                          className={`teacher-assignment-row ${isSelected ? "selected" : ""}`}
+                          onClick={() => setSelectedAssignmentId(asm.id)}
+                        >
+                          <span className={`teacher-assignment-status-dot ${status.toLowerCase()}`} aria-hidden="true"></span>
+                          <span className="teacher-assignment-row-main">
+                            <strong>{asm.name}</strong>
+                            <small>{typeLabel(asm.assignment_type)}</small>
+                          </span>
+                          <span className={`teacher-assignment-row-state ${status.toLowerCase()}`}>
+                            {dueInfo.helper}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="assignment-detail-panel teacher-assignment-detail-panel" aria-label="Chi tiết bài tập lớn">
+                  {selectedAssignment ? (
+                    (() => {
+                      const selectedStatus = getAssignmentStatus(selectedAssignment);
+                      const selectedDueInfo = getAssignmentDueInfo(selectedAssignment);
+                      return (
+                    <>
+                      <div className="teacher-assignment-detail-card">
+                        <div className="teacher-assignment-detail-kicker">
+                          <span className={`teacher-assignment-row-state ${selectedStatus.toLowerCase()}`}>
+                            {selectedStatus === "OPEN" ? "Đang mở" : "Đã đóng"}
+                          </span>
+                          <span>{typeLabel(selectedAssignment.assignment_type)}</span>
+                        </div>
+
+                        <div className="teacher-assignment-detail-header">
+                          <div>
+                            <h2>{selectedAssignment.name}</h2>
+                            {selectedAssignment.description && <p>{selectedAssignment.description}</p>}
+                          </div>
+                        <div className="assignment-detail-actions">
+                          <button className="btn btn-secondary" onClick={() => openEditAssignment(selectedAssignment)}>Sửa</button>
+                          <button className="btn btn-danger" onClick={() => handleDeleteAssignment(selectedAssignment.id)}>Xóa</button>
+                        </div>
+                      </div>
+
+                      <div className="teacher-assignment-meta-grid">
+                        <div>
+                          <span>Ngôn ngữ</span>
+                          <strong>{languageLabel(selectedAssignment.supported_languages)}</strong>
+                        </div>
+                        <div>
+                          <span>Chiến lược</span>
+                          <strong>{strategyLabel(selectedAssignment.testcase_generation_strategy)}</strong>
+                        </div>
+                        <div>
+                          <span>Hạn nộp</span>
+                          <strong>{selectedDueInfo.dateLabel}</strong>
+                        </div>
+                      </div>
+
+                      <div className="teacher-assignment-testcases">
+                        <div>
+                          <span>Seed</span>
+                          <strong>{selectedAssignment.testcase_seed_count || 0}</strong>
+                        </div>
+                        <div>
+                          <span>Sinh thêm</span>
+                          <strong>{selectedAssignment.generated_testcase_count || 0}</strong>
+                        </div>
+                      </div>
+                      </div>
+
+                      <div className="assignment-people-panel">
+                        <div className="panel-title-row">
+                          <div>
+                            <h3>Lớp học</h3>
+                          </div>
+                          <span className="panel-count-pill">{students.length} sinh viên</span>
+                        </div>
+                        <div className="assignment-people-grid">
+                          <div className="people-tool">
+                            <div className="form-group">
+                              <label className="form-label">Lớp</label>
+                              <input
+                                className="form-control"
+                                value={classSection}
+                                onChange={(e) => setClassSection(e.target.value)}
+                                placeholder="IT3180-01"
+                              />
+                            </div>
+                            <h4>Sinh viên</h4>
+                            <input
+                              type="file"
+                              accept=".csv,.xlsx,.xls"
+                              onChange={handleFileChange}
+                              ref={fileInputRef}
+                              id="assignment-roster-file-workbench"
+                              style={{ display: "none" }}
+                            />
+                            <label htmlFor="assignment-roster-file-workbench" className="upload-strip">
+                              <strong>{selectedFile?.name || "Chọn file CSV/XLSX"}</strong>
+                              <span>MSSV, họ tên, email</span>
+                            </label>
+                            <button className="btn btn-primary" onClick={handleCSVUpload} disabled={!selectedFile || isUploading}>
+                              {isUploading ? "Đang xử lý..." : "Import"}
+                            </button>
+                          </div>
+                          <div className="people-tool">
+                            <h4>Cộng tác</h4>
+                            <form onSubmit={handleAddTeacher} className="compact-inline-form">
+                              <input
+                                type="email"
+                                className="form-control"
+                                placeholder="email@hust.edu.vn"
+                                value={teacherEmail}
+                                onChange={(e) => setTeacherEmail(e.target.value)}
+                              />
+                              <button type="submit" className="btn btn-secondary">Thêm</button>
+                            </form>
+                            <div className="teacher-chip-list">
+                              <span>{user?.email} - chủ sở hữu</span>
+                              {coTeachers.map((email) => <span key={email}>{email}</span>)}
+                            </div>
+                          </div>
+                        </div>
+                        {uploadMessage && <div className="notice success">{uploadMessage}</div>}
+                        {uploadError && <div className="notice danger">{uploadError}</div>}
+                        <div className="student-mini-table">
+                          {isLoadingStudents && <p>Đang tải danh sách sinh viên...</p>}
+                          {!isLoadingStudents && students.length === 0 && <p>Chưa có sinh viên trong bài tập này.</p>}
+                          {!isLoadingStudents && classRosters.length > 0 && (
+                            <div className="class-roster-tabs">
+                              {classRosters.map((roster) => (
+                                <button
+                                  key={roster.name}
+                                  className={selectedClassName === roster.name ? "active" : ""}
+                                  onClick={() => setSelectedClassName(roster.name)}
+                                >
+                                  {roster.name} <span>{roster.student_count}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {!isLoadingStudents && students.length > 0 && (
+                            <table className="mock-table">
+                              <thead>
+                                <tr><th>MSSV</th><th>Họ tên</th><th>Email</th></tr>
+                              </thead>
+                              <tbody>
+                                {(classRosters.find((roster) => roster.name === selectedClassName)?.students || students).slice(0, 8).map((student) => (
+                                  <tr key={student.id}>
+                                    <td>{student.mssv}</td>
+                                    <td>{student.name}</td>
+                                    <td>{student.email}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                      );
+                    })()
+                  ) : (
+                    <div className="assignment-detail-empty">
+                      <h2>Chọn một bài tập</h2>
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              <div className="assignment-command-panel" style={{ display: "none" }}>
                 <div>
                   <span className="eyebrow">Assignment Studio</span>
                   <h2>Luồng tạo bài mới</h2>
@@ -567,7 +937,7 @@ export default function TeacherDashboard() {
                 )}
               </div>
 
-              {selectedAssignment && (
+              {false && selectedAssignment && (
                 <div className="assignment-people-panel">
                   <div className="panel-title-row">
                     <div>
@@ -597,7 +967,7 @@ export default function TeacherDashboard() {
                         style={{ display: "none" }}
                       />
                       <label htmlFor="assignment-roster-file" className="upload-strip">
-                        <strong>{selectedFile ? selectedFile.name : "Chọn file CSV/XLSX"}</strong>
+                        <strong>{selectedFile?.name || "Chọn file CSV/XLSX"}</strong>
                         <span>MSSV, Họ tên, Email</span>
                       </label>
                       <button className="btn btn-primary" onClick={handleCSVUpload} disabled={!selectedFile || isUploading}>
@@ -660,14 +1030,15 @@ export default function TeacherDashboard() {
                 </div>
               )}
 
-              {isLoadingAsms && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải bài tập...</p>}
-              {!isLoadingAsms && assignments.length === 0 && (
+              {false && isLoadingAsms && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải bài tập...</p>}
+              {false && !isLoadingAsms && assignments.length === 0 && (
                 <div className="tech-panel" style={{ textAlign: "center", padding: "3rem" }}>
                   <p style={{ color: "hsl(var(--text-muted))" }}>Chưa có bài tập lớn nào được tạo.</p>
                 </div>
               )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+              {false && (
+              <div style={{ display: "none" }}>
                 {assignments.map((asm) => (
                   <div
                     key={asm.id}
@@ -702,6 +1073,7 @@ export default function TeacherDashboard() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           )}
 
@@ -719,10 +1091,10 @@ export default function TeacherDashboard() {
                     className="form-control"
                     value={selectedAssignmentId}
                     onChange={(e) => setSelectedAssignmentId(e.target.value)}
-                    style={{ background: "rgba(0,0,0,0.2)" }}
+                    style={{ background: "white" }}
                   >
                     {assignments.map((asm) => (
-                      <option key={asm.id} value={asm.id} style={{ background: "#222" }}>{asm.name}</option>
+                      <option key={asm.id} value={asm.id}>{asm.name}</option>
                     ))}
                   </select>
                 </div>
@@ -741,7 +1113,7 @@ export default function TeacherDashboard() {
                   padding: "2rem",
                   borderRadius: "var(--radius-md)",
                   textAlign: "center",
-                  background: "rgba(255,255,255,0.01)",
+                  background: "hsl(var(--bg-card))",
                 }}>
                   <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem", fontWeight: 700 }}>CSV / XLSX</div>
                   <input
@@ -771,13 +1143,13 @@ export default function TeacherDashboard() {
               </div>
 
               {uploadMessage && (
-                <div style={{ marginTop: "1.5rem", padding: "1rem", background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "var(--radius-sm)", color: "hsl(var(--color-success))" }}>
+                <div className="notice success">
                   {uploadMessage}
                 </div>
               )}
 
               {uploadError && (
-                <div style={{ marginTop: "1.5rem", padding: "1rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-sm)", color: "rgb(239, 68, 68)" }}>
+                <div className="notice danger">
                   Cảnh báo: {uploadError}
                 </div>
               )}
@@ -878,7 +1250,7 @@ export default function TeacherDashboard() {
               {isLoadingAnalytics && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải dữ liệu thống kê...</p>}
               {!isLoadingAnalytics && analyticsData && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+                  <div className="two-column-grid">
                     <div className="tech-panel" style={{ marginTop: "0", textAlign: "center" }}>
                       <h3 style={{ color: "hsl(var(--text-secondary))", fontSize: "1rem", marginBottom: "0.5rem" }}>Tổng số lượt feedback</h3>
                       <div style={{ fontSize: "2.5rem", fontWeight: "800", color: "hsl(var(--color-primary))" }}>
@@ -903,7 +1275,7 @@ export default function TeacherDashboard() {
                           .map(([tcId, count]) => (
                             <div key={tcId} style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
                               <div style={{ width: "80px", fontFamily: "var(--font-mono)" }}>Test {tcId}</div>
-                              <div style={{ flex: 1, background: "rgba(255,255,255,0.05)", height: "12px", borderRadius: "6px", overflow: "hidden" }}>
+                              <div style={{ flex: 1, background: "hsl(var(--bg-card))", height: "12px", borderRadius: "6px", overflow: "hidden" }}>
                                 <div style={{ width: `${(count / analyticsData.total) * 100}%`, height: "100%", background: "hsl(var(--color-primary))" }}></div>
                               </div>
                               <div style={{ width: "40px", textAlign: "right" }}>{count}</div>
@@ -918,7 +1290,7 @@ export default function TeacherDashboard() {
                       <h3 className="tech-panel-title">Các phản hồi ý kiến gần đây</h3>
                       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                         {analyticsData.feedbacks.map((feedback, idx) => (
-                          <div key={`${feedback.created_at || idx}`} style={{ padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "var(--radius-sm)", borderLeft: "3px solid hsl(var(--color-primary))" }}>
+                          <div key={`${feedback.created_at || idx}`} style={{ padding: "1rem", background: "hsl(var(--bg-card))", borderRadius: "var(--radius-sm)", borderLeft: "3px solid hsl(var(--color-primary))" }}>
                             <div style={{ marginBottom: "0.5rem" }}>
                               <span>{feedback.rating}/5 sao</span>
                               <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))", marginLeft: "1rem" }}>
@@ -1195,11 +1567,11 @@ function AssignmentPicker({
           className="form-control"
           value={selectedAssignmentId}
           onChange={(e) => setSelectedAssignmentId(e.target.value)}
-          style={{ background: "rgba(0,0,0,0.2)" }}
+          style={{ background: "white" }}
         >
           <option value="" disabled>-- Chọn bài tập lớn --</option>
           {assignments.map((assignment) => (
-            <option key={assignment.id} value={assignment.id} style={{ background: "#222" }}>
+            <option key={assignment.id} value={assignment.id}>
               {assignment.name}
             </option>
           ))}

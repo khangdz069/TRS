@@ -4,6 +4,28 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+interface LoginResponse {
+  token?: string;
+  account?: {
+    role?: "TEACHER" | "STUDENT";
+    [key: string]: unknown;
+  };
+  student?: unknown;
+  teacher?: unknown;
+  error?: string;
+}
+
+const readApiResponse = async (response: Response): Promise<LoginResponse> => {
+  const rawText = await response.text();
+  if (!rawText) return {};
+
+  try {
+    return JSON.parse(rawText) as LoginResponse;
+  } catch {
+    return { error: rawText };
+  }
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -42,12 +64,14 @@ export default function LoginPage() {
         }),
       });
 
+      const data = await readApiResponse(response);
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Đăng nhập thất bại");
+        throw new Error(data.error || `Đăng nhập thất bại. Mã lỗi HTTP ${response.status}.`);
+      }
+      if (!data.token || !data.account?.role) {
+        throw new Error("Máy chủ trả về dữ liệu đăng nhập không đầy đủ.");
       }
 
-      const data = await response.json();
       localStorage.setItem("trs_token", data.token);
       localStorage.setItem("trs_user", JSON.stringify(data.account));
       if (data.student) localStorage.setItem("trs_student", JSON.stringify(data.student));
@@ -83,31 +107,29 @@ export default function LoginPage() {
 
       <main className="main container">
         <div className="login-card-wrapper">
-          <div className="login-card">
-            <div style={{ marginBottom: "1rem", fontSize: "3rem" }}>🔐</div>
+          <section className="login-visual" aria-label="Không gian học tập TRS">
+            <div className="login-visual-panel">
+              <strong>Learning workflow, cleaned up.</strong>
+              <span>Giảng viên và sinh viên dùng chung một cổng, hệ thống tự chuyển đúng dashboard sau xác thực.</span>
+            </div>
+          </section>
+
+          <section className="login-card">
+            <div className="login-mark">TRS</div>
             <h1 className="login-title">Đăng nhập hệ thống</h1>
             <p className="login-subtitle">
-              Nhập email và tên của bạn để giả lập xác thực Google OAuth 2.0.
+              Nhập email và tên để giả lập xác thực Google OAuth 2.0 trong môi trường phát triển.
             </p>
 
             {error && (
-              <div style={{
-                background: "rgba(239, 68, 68, 0.1)",
-                border: "1px solid rgba(239, 68, 68, 0.2)",
-                color: "rgb(239, 68, 68)",
-                padding: "0.75rem",
-                borderRadius: "var(--radius-sm)",
-                fontSize: "0.85rem",
-                marginBottom: "1rem",
-                textAlign: "left",
-              }}>
+              <div className="notice danger" style={{ marginBottom: "1rem", marginTop: "0" }}>
                 Cảnh báo: {error}
               </div>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.5rem", textAlign: "left" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", marginBottom: "1.35rem" }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: "0.85rem" }}>
+                <label className="form-label">
                   Địa chỉ email, để trống sẽ tự điền email test
                 </label>
                 <input
@@ -116,11 +138,10 @@ export default function LoginPage() {
                   placeholder="Ví dụ: nam.tv20231234@sis.hust.edu.vn"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  style={{ background: "rgba(255,255,255,0.03)" }}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: "0.85rem" }}>
+                <label className="form-label">
                   Họ và tên, không bắt buộc
                 </label>
                 <input
@@ -129,19 +150,18 @@ export default function LoginPage() {
                   placeholder="Ví dụ: Trần Văn Nam"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  style={{ background: "rgba(255,255,255,0.03)" }}
                 />
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
               <button
                 onClick={() => handleLogin("TEACHER")}
                 disabled={isLoading}
                 className="google-btn"
-                style={{ cursor: "pointer", background: "none", width: "100%", textAlign: "left" }}
+                type="button"
               >
-                <svg className="google-icon" viewBox="0 0 24 24">
+                <svg className="google-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.54 14.98 1 12 1 7.35 1 3.37 3.67 1.39 7.56l3.96 3.07C6.31 7.55 8.94 5.04 12 5.04z" />
                   <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.47h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.66 2.84c2.14-1.97 3.75-4.87 3.75-8.52z" />
                   <path fill="#FBBC05" d="M5.35 10.63c-.25-.75-.39-1.56-.39-2.38 0-.82.14-1.63.39-2.38L1.39 2.8C.5 4.57 0 6.57 0 8.75c0 2.18.5 4.18 1.39 5.95l3.96-3.07z" />
@@ -154,9 +174,9 @@ export default function LoginPage() {
                 onClick={() => handleLogin("STUDENT")}
                 disabled={isLoading}
                 className="google-btn"
-                style={{ cursor: "pointer", background: "none", width: "100%", textAlign: "left", borderColor: "hsl(var(--color-primary))" }}
+                type="button"
               >
-                <svg className="google-icon" viewBox="0 0 24 24">
+                <svg className="google-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.54 14.98 1 12 1 7.35 1 3.37 3.67 1.39 7.56l3.96 3.07C6.31 7.55 8.94 5.04 12 5.04z" />
                   <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.34H12v4.47h6.44c-.28 1.47-1.11 2.71-2.36 3.55l3.66 2.84c2.14-1.97 3.75-4.87 3.75-8.52z" />
                   <path fill="#FBBC05" d="M5.35 10.63c-.25-.75-.39-1.56-.39-2.38 0-.82.14-1.63.39-2.38L1.39 2.8C.5 4.57 0 6.57 0 8.75c0 2.18.5 4.18 1.39 5.95l3.96-3.07z" />
@@ -167,9 +187,9 @@ export default function LoginPage() {
             </div>
 
             <div className="login-footer-info">
-              Hệ thống sử dụng cổng xác thực giả lập phục vụ phát triển phần mềm TRS Rebuild.
+              Hệ thống dùng cổng xác thực giả lập phục vụ phát triển phần mềm TRS Rebuild.
             </div>
-          </div>
+          </section>
         </div>
       </main>
 

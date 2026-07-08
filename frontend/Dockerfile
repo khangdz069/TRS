@@ -8,6 +8,7 @@ RUN npm install
 
 # Copy source code and build
 COPY . .
+ENV BACKEND_URL=http://backend:5102
 RUN npm run build
 
 # Next.js listens on port 3100 by default
