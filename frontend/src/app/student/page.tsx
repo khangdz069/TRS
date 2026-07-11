@@ -8,6 +8,11 @@ interface Assignment {
   id: string;
   name: string;
   description: string;
+  assignment_type?: AssignmentType;
+  supported_languages?: string[];
+  problem_statement?: string;
+  starter_code?: string;
+  type_config?: string;
   start_date: string;
   end_date: string;
   author_name: string;
@@ -70,6 +75,128 @@ interface EncodedSubmissionFile {
 }
 
 type StudentTab = "assignments" | "submit" | "history";
+type AssignmentType = "STANDARD" | "FILL_BLANK" | "DEBUGGING" | "PROJECT" | "QUIZ_CODE";
+
+const ASSIGNMENT_TYPES: Array<{ value: AssignmentType; label: string }> = [
+  { value: "STANDARD", label: "Bài thường" },
+  { value: "FILL_BLANK", label: "Bài đục lỗ" },
+  { value: "DEBUGGING", label: "Bài sửa lỗi" },
+  { value: "PROJECT", label: "Mini project" },
+  { value: "QUIZ_CODE", label: "Trắc nghiệm code" },
+];
+
+const typeLabel = (value?: string) =>
+  ASSIGNMENT_TYPES.find((item) => item.value === value)?.label || "Bài thường";
+
+const LANGUAGE_OPTIONS = [
+  { value: "cpp", label: "C++", extension: ".cpp" },
+  { value: "c", label: "C", extension: ".c" },
+  { value: "java", label: "Java", extension: ".java" },
+  { value: "python", label: "Python", extension: ".py" },
+  { value: "javascript", label: "JavaScript", extension: ".js" },
+  { value: "typescript", label: "TypeScript", extension: ".ts" },
+  { value: "go", label: "Go", extension: ".go" },
+  { value: "rust", label: "Rust", extension: ".rs" },
+];
+
+const languageLabel = (values?: string[]) => {
+  if (!values || values.length === 0) return "C++";
+  return values.map((value) => LANGUAGE_OPTIONS.find((item) => item.value === value)?.label || value).join(", ");
+};
+
+const primaryLanguage = (assignment?: Assignment) => assignment?.supported_languages?.[0] || "cpp";
+
+const languageExtension = (language: string) =>
+  LANGUAGE_OPTIONS.find((item) => item.value === language)?.extension || ".cpp";
+
+const defaultSubmissionFilename = (assignment: Assignment) => {
+  const extension = languageExtension(primaryLanguage(assignment));
+  if (assignment.assignment_type === "QUIZ_CODE") return `answer${extension}`;
+  if (assignment.assignment_type === "PROJECT") return `main${extension}`;
+  return `solution${extension}`;
+};
+
+const acceptedFileTypes = (assignment: Assignment) => {
+  const languageExtensions = (assignment.supported_languages?.length ? assignment.supported_languages : ["cpp"])
+    .map(languageExtension);
+  return Array.from(new Set([...languageExtensions, ".h", ".hpp", ".zip"])).join(",");
+};
+
+const defaultEditorContent = (assignment: Assignment) => {
+  const language = primaryLanguage(assignment);
+  if (assignment.assignment_type === "QUIZ_CODE") {
+    return "// Viết câu trả lời code ngắn của bạn ở đây.\n";
+  }
+  if (assignment.assignment_type === "FILL_BLANK") {
+    return "// Hoàn thiện các phần còn thiếu trong starter code.\n";
+  }
+  if (assignment.assignment_type === "DEBUGGING") {
+    return "// Dán bản code đã sửa lỗi của bạn ở đây.\n";
+  }
+  if (assignment.assignment_type === "PROJECT") {
+    return language === "cpp"
+      ? '#include "main.hpp"\n\n// Có thể nộp file chính ở đây hoặc upload toàn bộ project dạng .zip.\n'
+      : "// Có thể nộp file chính ở đây hoặc upload toàn bộ project dạng .zip.\n";
+  }
+  return language === "cpp"
+    ? '#include "kNN.hpp"\n\n// Viết mã nguồn giải bài tập của bạn ở đây.\n'
+    : "// Viết mã nguồn giải bài tập của bạn ở đây.\n";
+};
+
+const submitProfile = (assignment: Assignment) => {
+  switch (assignment.assignment_type) {
+    case "FILL_BLANK":
+      return {
+        title: "Hoàn thiện bài đục lỗ",
+        subtitle: "Điền phần còn thiếu và nộp bản hoàn chỉnh để hệ thống chấm.",
+        editorTitle: "Hoàn thiện trong editor",
+        editorLabel: "Bản code hoàn chỉnh",
+        fileTitle: "Nộp file đã hoàn thiện",
+        filePrompt: "Kéo thả file đã hoàn thiện hoặc .zip nếu bài có nhiều file",
+        submitLabel: "Nộp bài đã hoàn thiện",
+      };
+    case "DEBUGGING":
+      return {
+        title: "Nộp bản sửa lỗi",
+        subtitle: "Sửa code lỗi theo đề bài rồi nộp bản đã chạy đúng.",
+        editorTitle: "Sửa lỗi trong editor",
+        editorLabel: "Bản code đã sửa",
+        fileTitle: "Nộp file đã sửa lỗi",
+        filePrompt: "Kéo thả file đã sửa hoặc .zip nếu bài có nhiều file",
+        submitLabel: "Nộp bản sửa lỗi",
+      };
+    case "PROJECT":
+      return {
+        title: "Nộp mini project",
+        subtitle: "Nộp file chính hoặc đóng gói toàn bộ project thành .zip.",
+        editorTitle: "File chính",
+        editorLabel: "Nội dung file chính",
+        fileTitle: "Nộp project",
+        filePrompt: "Kéo thả .zip hoặc chọn nhiều file trong project",
+        submitLabel: "Nộp project",
+      };
+    case "QUIZ_CODE":
+      return {
+        title: "Trả lời trắc nghiệm code",
+        subtitle: "Viết lời giải code ngắn theo yêu cầu của câu hỏi.",
+        editorTitle: "Câu trả lời code",
+        editorLabel: "Đáp án của bạn",
+        fileTitle: "Nộp file đáp án",
+        filePrompt: "Kéo thả file đáp án hoặc .zip nếu cần đính kèm thêm",
+        submitLabel: "Nộp đáp án",
+      };
+    default:
+      return {
+        title: "Nộp bài giải",
+        subtitle: "Nộp mã nguồn để hệ thống chấm bằng testcase.",
+        editorTitle: "Trình soạn thảo mã",
+        editorLabel: "Mã nguồn của bạn",
+        fileTitle: "Kéo & thả file mã nguồn",
+        filePrompt: "Kéo thả .zip hoặc chọn các file mã nguồn",
+        submitLabel: "Nộp bài giải",
+      };
+  }
+};
 
 const STUDENT_ACTIVE_TAB_KEY = "trs_student_active_tab";
 const STUDENT_SELECTED_ASSIGNMENT_KEY = "trs_student_selected_assignment_id";
@@ -184,6 +311,7 @@ export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState<StudentTab>("assignments");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [assignmentQuery, setAssignmentQuery] = useState("");
+  const [assignmentTypeFilter, setAssignmentTypeFilter] = useState<"ALL" | AssignmentType>("ALL");
   const [assignmentStatusFilter, setAssignmentStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
   
   // Data States
@@ -336,6 +464,17 @@ export default function StudentDashboard() {
       fetchSubmissions(selectedAsm.id);
     }
   }, [selectedAsm]);
+
+  useEffect(() => {
+    if (!selectedAsm) return;
+    setEditorFile(defaultSubmissionFilename(selectedAsm));
+    setEditorContent(selectedAsm.starter_code?.trim() ? selectedAsm.starter_code : defaultEditorContent(selectedAsm));
+    setSolutionFiles([]);
+    setEncodedSolutionFiles([]);
+    setSubmitSuccess(false);
+    setSubmitError("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, [selectedAsm?.id]);
 
   useEffect(() => {
     if (selectedSubmission) {
@@ -581,20 +720,28 @@ export default function StudentDashboard() {
   };
 
   const assignmentSearchTerm = assignmentQuery.trim().toLowerCase();
+  const assignmentTypeOptions = Array.from(
+    new Set(assignments.map((assignment) => assignment.assignment_type || "STANDARD"))
+  ) as AssignmentType[];
   const filteredAssignments = assignments.filter((assignment) => {
     const status = getAssignmentStatus(assignment);
+    const matchesType = assignmentTypeFilter === "ALL" || (assignment.assignment_type || "STANDARD") === assignmentTypeFilter;
     const matchesStatus = assignmentStatusFilter === "ALL" || status === assignmentStatusFilter;
     const searchableText = [
       assignment.name,
       assignment.description,
       assignment.author_name,
+      typeLabel(assignment.assignment_type),
       assignment.id,
     ].join(" ").toLowerCase();
 
-    return matchesStatus && (!assignmentSearchTerm || searchableText.includes(assignmentSearchTerm));
+    return matchesType && matchesStatus && (!assignmentSearchTerm || searchableText.includes(assignmentSearchTerm));
   });
   const openAssignmentCount = assignments.filter((assignment) => getAssignmentStatus(assignment) === "OPEN").length;
   const closedAssignmentCount = assignments.length - openAssignmentCount;
+  const selectedSubmitProfile = selectedAsm ? submitProfile(selectedAsm) : null;
+  const selectedAssignmentBrief = selectedAsm?.problem_statement?.trim() || selectedAsm?.description?.trim() || "";
+  const selectedAssignmentConfig = selectedAsm?.type_config?.trim() || "";
 
   const getStatusMessage = (recStatus: string) => {
     switch (recStatus) {
@@ -753,11 +900,11 @@ export default function StudentDashboard() {
           <Link href="/" className="logo">
             TRS <span className="logo-badge">Rebuild</span>
           </Link>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-            <span style={{ fontSize: "0.9rem", color: "hsl(var(--text-secondary))" }}>
+          <div className="teacher-header-actions">
+            <span>
               Sinh viên: <strong>{studentName}</strong>
             </span>
-            <button onClick={logout} className="sys-status" style={{ background: "rgba(239, 68, 68, 0.1)", color: "rgb(239, 68, 68)", borderColor: "rgba(239, 68, 68, 0.2)", textDecoration: "none", cursor: "pointer" }}>
+            <button onClick={logout} className="btn btn-danger">
               Đăng xuất
             </button>
           </div>
@@ -782,9 +929,9 @@ export default function StudentDashboard() {
             <div className="sidebar-title">Menu Nộp Bài</div>
           </div>
           <nav className="sidebar-nav">
-            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Bài tập lớn của tôi">
+            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Bài tập của tôi">
               <span className="sidebar-icon assignment" aria-hidden="true"></span>
-              <span className="sidebar-label">Bài tập lớn của tôi</span>
+              <span className="sidebar-label">Bài tập của tôi</span>
             </button>
             {selectedAsm && (
               <div className="sidebar-assignment-subnav">
@@ -803,6 +950,16 @@ export default function StudentDashboard() {
               </div>
             )}
           </nav>
+          <div className="sidebar-account">
+            <div className="sidebar-user-card">
+              <span>Sinh viên</span>
+              <strong>{studentName}</strong>
+            </div>
+            <button type="button" className="sidebar-logout-button" onClick={logout} title="Đăng xuất">
+              <span className="sidebar-logout-icon" aria-hidden="true"></span>
+              <span className="sidebar-label">Đăng xuất</span>
+            </button>
+          </div>
         </aside>
 
         {/* Main Content */}
@@ -812,7 +969,7 @@ export default function StudentDashboard() {
               <div className="student-assignment-toolbar">
                 <div>
                   <span className="student-assignment-eyebrow">Không gian học tập</span>
-                  <h1>Bài tập lớn</h1>
+                  <h1>Bài tập</h1>
                 </div>
                 <div className="student-assignment-stats" aria-label="Tổng quan bài tập">
                   <div>
@@ -833,13 +990,13 @@ export default function StudentDashboard() {
               {isLoadingAsms && <div className="assignment-list-state">Đang tải bài tập...</div>}
               {!isLoadingAsms && assignments.length === 0 && (
                 <div className="tech-panel" style={{ textAlign: "center", padding: "3rem" }}>
-                  <p style={{ color: "hsl(var(--text-muted))" }}>Bạn chưa được đăng ký vào bài tập lớn nào.</p>
+                  <p style={{ color: "hsl(var(--text-muted))" }}>Bạn chưa được đăng ký vào bài tập nào.</p>
                 </div>
               )}
 
               {!isLoadingAsms && assignments.length > 0 && (
                 <div className="student-assignment-workspace">
-                  <section className="student-assignment-list-panel" aria-label="Danh sách bài tập lớn tham gia">
+                  <section className="student-assignment-list-panel" aria-label="Danh sách bài tập tham gia">
                     <div className="student-assignment-list-header">
                       <div>
                         <h2>Bài</h2>
@@ -861,6 +1018,16 @@ export default function StudentDashboard() {
                           </button>
                         )}
                       </label>
+                      <select
+                        className="assignment-filter-select"
+                        value={assignmentTypeFilter}
+                        onChange={(e) => setAssignmentTypeFilter(e.target.value as "ALL" | AssignmentType)}
+                      >
+                        <option value="ALL">Mọi dạng</option>
+                        {assignmentTypeOptions.map((type) => (
+                          <option key={type} value={type}>{typeLabel(type)}</option>
+                        ))}
+                      </select>
                       <div className="student-assignment-filter-tabs" aria-label="Lọc bài tập theo trạng thái">
                         <button
                           type="button"
@@ -904,6 +1071,7 @@ export default function StudentDashboard() {
                             <span className={`student-assignment-status-dot ${status.toLowerCase()}`} aria-hidden="true"></span>
                             <span className="student-assignment-row-main">
                               <strong>{asm.name}</strong>
+                              <small>{typeLabel(asm.assignment_type)}</small>
                             </span>
                             <span className={`student-assignment-row-state ${status.toLowerCase()}`}>
                               {dueInfo.helper}
@@ -914,7 +1082,7 @@ export default function StudentDashboard() {
                     </div>
                   </section>
 
-                  <section className="student-assignment-detail-card" aria-label="Chi tiết bài tập lớn đang chọn">
+                  <section className="student-assignment-detail-card" aria-label="Chi tiết bài tập đang chọn">
                     {selectedAsm ? (
                       (() => {
                         const selectedStatus = getAssignmentStatus(selectedAsm);
@@ -968,19 +1136,46 @@ export default function StudentDashboard() {
             </div>
           )}
 
-          {activeTab === "submit" && selectedAsm && (
-            <div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Nộp bài giải mới</h1>
-              <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Nộp mã nguồn cho bài tập: <strong style={{ color: "hsl(var(--color-primary))" }}>{selectedAsm.name}</strong>
-              </p>
+          {activeTab === "submit" && selectedAsm && selectedSubmitProfile && (
+            <div className="student-submit-page">
+              <div className="student-submit-toolbar">
+                <div>
+                  <span className="student-assignment-eyebrow">{typeLabel(selectedAsm.assignment_type)}</span>
+                  <h1>{selectedSubmitProfile.title}</h1>
+                  <p>{selectedSubmitProfile.subtitle} <strong>{selectedAsm.name}</strong></p>
+                </div>
+              </div>
+
+              <div className="student-submit-context">
+                <div className="student-submit-meta" aria-label="Thông tin bài nộp">
+                  <div>
+                    <span>Dạng bài</span>
+                    <strong>{typeLabel(selectedAsm.assignment_type)}</strong>
+                  </div>
+                  <div>
+                    <span>Ngôn ngữ</span>
+                    <strong>{languageLabel(selectedAsm.supported_languages)}</strong>
+                  </div>
+                </div>
+                {selectedAssignmentBrief && (
+                  <div className="student-submit-brief">
+                    <span>Đề bài</span>
+                    <p>{selectedAssignmentBrief}</p>
+                  </div>
+                )}
+                {selectedAssignmentConfig && (
+                  <div className="student-submit-brief">
+                    <span>Ghi chú cấu hình</span>
+                    <p>{selectedAssignmentConfig}</p>
+                  </div>
+                )}
+              </div>
 
               <div className="submit-grid">
-                {/* Method 1: Paste Code Editor */}
                 <div className="tech-panel" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
-                  <h3 className="tech-panel-title">Phương án 1: Trình soạn thảo mã</h3>
+                  <h3 className="tech-panel-title">{selectedSubmitProfile.editorTitle}</h3>
                   <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label className="form-label">Tên tệp tin (ví dụ: solution.cpp, kNN.cpp)</label>
+                    <label className="form-label">Tên tệp</label>
                     <input
                       type="text"
                       className="form-control"
@@ -989,7 +1184,7 @@ export default function StudentDashboard() {
                     />
                   </div>
                   <div className="form-group" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                    <label className="form-label">Mã nguồn của bạn</label>
+                    <label className="form-label">{selectedSubmitProfile.editorLabel}</label>
                     <textarea
                       className="form-control"
                       value={editorContent}
@@ -1003,13 +1198,12 @@ export default function StudentDashboard() {
                     disabled={isSubmitting}
                     style={{ marginTop: "1rem", alignSelf: "flex-end" }}
                   >
-                    {isSubmitting ? "Đang chấm..." : "Nộp nội dung trong editor"}
+                    {isSubmitting ? "Đang chấm..." : selectedSubmitProfile.submitLabel}
                   </button>
                 </div>
 
-                {/* Method 2: Drag & Drop C++ source files */}
                 <div className="tech-panel" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
-                  <h3 className="tech-panel-title">Phương án 2: Kéo & thả file mã nguồn</h3>
+                  <h3 className="tech-panel-title">{selectedSubmitProfile.fileTitle}</h3>
                   
                   <div
                     className={`upload-zone ${dragActive ? "drag-active" : ""}`}
@@ -1026,7 +1220,7 @@ export default function StudentDashboard() {
                         ? "Đang đọc file..."
                         : encodedSolutionFiles.length > 0
                           ? `Đã sẵn sàng: ${encodedSolutionFiles.map(f => f.filename).join(', ')}`
-                          : "Kéo thả .zip hoặc chọn lần lượt kNN.cpp, kNN.hpp"}
+                          : selectedSubmitProfile.filePrompt}
                     </div>
                     <div style={{ marginTop: "0.5rem", color: "hsl(var(--text-muted))", fontSize: "0.82rem", lineHeight: 1.5 }}>
                       Có thể chọn nhiều file cùng lúc hoặc chọn từng file nhiều lần; hệ thống sẽ tự cộng dồn theo tên file.
@@ -1034,7 +1228,7 @@ export default function StudentDashboard() {
                     <input
                       type="file"
                       multiple
-                      accept=".cpp,.c,.h,.hpp,.zip"
+                      accept={acceptedFileTypes(selectedAsm)}
                       ref={fileInputRef}
                       onChange={handleFileChange}
                       style={{ display: "none" }}

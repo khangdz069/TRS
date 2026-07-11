@@ -23,7 +23,7 @@ export default function Home() {
               TRS Rebuild cho lớp lập trình hiện đại
             </h1>
             <p className="hero-desc">
-              Cổng quản lý bài tập lớn, nộp mã nguồn, chấm tự động và gợi ý testcase
+              Cổng quản lý bài tập, nộp mã nguồn, chấm tự động và gợi ý testcase
               được làm lại với giao diện sáng, rõ thứ bậc và dễ dùng hơn.
             </p>
 

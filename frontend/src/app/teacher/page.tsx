@@ -155,6 +155,37 @@ const typeConfigPlaceholder = (type: AssignmentType) => {
   return "Ví dụ: time_limit=2s; memory=256MB; public_tests=10.";
 };
 
+const rosterDisplayName = (name: string) => {
+  const normalizedName = name.trim().toLowerCase();
+  if (normalizedName === "default") return "Chưa phân lớp";
+  return name;
+};
+
+const STUDENT_ROSTER_PAGE_SIZE = 5;
+
+const getPaginationItems = (currentPage: number, totalPages: number) => {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const visiblePages = new Set(
+    [1, totalPages, currentPage - 1, currentPage, currentPage + 1].filter(
+      (page) => page >= 1 && page <= totalPages
+    )
+  );
+  const sortedPages = Array.from(visiblePages).sort((a, b) => a - b);
+  const items: Array<number | "gap"> = [];
+
+  sortedPages.forEach((page, index) => {
+    if (index > 0 && page - sortedPages[index - 1] > 1) {
+      items.push("gap");
+    }
+    items.push(page);
+  });
+
+  return items;
+};
+
 export default function TeacherDashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,6 +208,7 @@ export default function TeacherDashboard() {
   const [classRosters, setClassRosters] = useState<ClassRoster[]>([]);
   const [classSection, setClassSection] = useState("");
   const [selectedClassName, setSelectedClassName] = useState("");
+  const [studentRosterPage, setStudentRosterPage] = useState(1);
   const [coTeachers, setCoTeachers] = useState<string[]>([
     "lan.nt@hust.edu.vn",
     "hung.pv@hust.edu.vn",
@@ -257,6 +289,17 @@ export default function TeacherDashboard() {
   };
   const seedCount = countSeedTestcases(sampleTestcases);
   const generatedPreview = generateTestcases(sampleTestcases, Math.min(generatedCount, 8), generationStrategy);
+  const activeRosterStudents = classRosters.find((roster) => roster.name === selectedClassName)?.students || students;
+  const studentRosterTotalPages = Math.max(1, Math.ceil(activeRosterStudents.length / STUDENT_ROSTER_PAGE_SIZE));
+  const currentStudentRosterPage = Math.min(studentRosterPage, studentRosterTotalPages);
+  const studentRosterStartIndex = (currentStudentRosterPage - 1) * STUDENT_ROSTER_PAGE_SIZE;
+  const pagedRosterStudents = activeRosterStudents.slice(
+    studentRosterStartIndex,
+    studentRosterStartIndex + STUDENT_ROSTER_PAGE_SIZE
+  );
+  const studentRosterFrom = activeRosterStudents.length === 0 ? 0 : studentRosterStartIndex + 1;
+  const studentRosterTo = Math.min(studentRosterStartIndex + STUDENT_ROSTER_PAGE_SIZE, activeRosterStudents.length);
+  const studentRosterPageItems = getPaginationItems(currentStudentRosterPage, studentRosterTotalPages);
 
   useEffect(() => {
     setAssignmentStatusNow(Date.now());
@@ -288,6 +331,10 @@ export default function TeacherDashboard() {
       fetchAnalytics(selectedAssignmentId);
     }
   }, [selectedAssignmentId, activeTab]);
+
+  useEffect(() => {
+    setStudentRosterPage(1);
+  }, [selectedAssignmentId, selectedClassName]);
 
   const fetchAssignments = async (token?: string) => {
     const activeToken = token || localStorage.getItem("trs_token");
@@ -326,6 +373,7 @@ export default function TeacherDashboard() {
         setStudents(data.student_list || []);
         const rosters = data.class_rosters || [];
         setClassRosters(rosters);
+        setStudentRosterPage(1);
         if (rosters.length > 0 && !rosters.some((roster: ClassRoster) => roster.name === selectedClassName)) {
           setSelectedClassName(rosters[0].name);
         }
@@ -432,7 +480,7 @@ export default function TeacherDashboard() {
 
       if (!response.ok) {
         const errData = await response.json();
-        alert(errData.error || "Không thể tạo bài tập lớn.");
+        alert(errData.error || "Không thể tạo bài tập.");
         return;
       }
 
@@ -557,8 +605,8 @@ export default function TeacherDashboard() {
             TRS <span className="logo-badge">Rebuild</span>
           </Link>
           <div className="teacher-header-actions">
-            <span style={{ fontSize: "0.9rem", color: "hsl(var(--text-secondary))" }}>
-              Chào giảng viên: <strong>{user?.name || "Teacher"}</strong>
+            <span>
+              Giảng viên: <strong>{user?.name || "Teacher"}</strong>
             </span>
             <button onClick={logout} className="btn btn-danger">
               Đăng xuất
@@ -584,9 +632,9 @@ export default function TeacherDashboard() {
             <div className="sidebar-title">Menu quản lý</div>
           </div>
           <nav className="sidebar-nav">
-            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Quản lý bài tập lớn">
+            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Quản lý bài tập">
               <span className="sidebar-icon assignment" aria-hidden="true"></span>
-              <span className="sidebar-label">Quản lý bài tập lớn</span>
+              <span className="sidebar-label">Quản lý bài tập</span>
             </button>
             <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "import" ? "active" : ""}`} onClick={() => setActiveTab("import")} title="Đăng ký sinh viên">
               <span className="sidebar-icon import" aria-hidden="true"></span>
@@ -605,6 +653,16 @@ export default function TeacherDashboard() {
               <span className="sidebar-label">Thống kê survey</span>
             </button>
           </nav>
+          <div className="sidebar-account">
+            <div className="sidebar-user-card">
+              <span>Giảng viên</span>
+              <strong>{user?.name || "Teacher"}</strong>
+            </div>
+            <button type="button" className="sidebar-logout-button" onClick={logout} title="Đăng xuất">
+              <span className="sidebar-logout-icon" aria-hidden="true"></span>
+              <span className="sidebar-label">Đăng xuất</span>
+            </button>
+          </div>
         </aside>
 
         <main className="content-area">
@@ -613,14 +671,14 @@ export default function TeacherDashboard() {
               <div className="teacher-page-toolbar teacher-assignment-toolbar">
                 <div>
                   <span className="teacher-assignment-eyebrow">Assignment studio</span>
-                  <h1>Bài tập lớn</h1>
+                  <h1>Bài tập</h1>
                 </div>
                 <button className="btn btn-primary" onClick={openCreateAssignment}>
                   Tạo bài tập
                 </button>
               </div>
 
-              <section className="teacher-assignment-stats" aria-label="Tổng quan bài tập lớn">
+              <section className="teacher-assignment-stats" aria-label="Tổng quan bài tập">
                 <div>
                   <span>Tất cả</span>
                   <strong>{assignments.length}</strong>
@@ -639,18 +697,18 @@ export default function TeacherDashboard() {
                 </div>
               </section>
 
-              <section className="teacher-metrics-table-card" aria-label="Tổng quan bài tập lớn" style={{ display: "none" }}>
+              <section className="teacher-metrics-table-card" aria-label="Tổng quan bài tập" style={{ display: "none" }}>
                 <div className="teacher-metrics-header">
                   <div>
                     <h2>Tổng quan bài tập</h2>
-                    <p>Các chỉ số chính của kho bài tập lớn.</p>
+                    <p>Các chỉ số chính của kho bài tập.</p>
                   </div>
                 </div>
                 <div className="teacher-metrics-chunks">
                   <div className="teacher-metric-tile">
                     <span>Tổng bài</span>
                     <strong>{assignments.length}</strong>
-                    <small>Bài tập lớn đã tạo</small>
+                    <small>Bài tập đã tạo</small>
                   </div>
                   <div className="teacher-metric-tile">
                     <span>Dạng bài</span>
@@ -678,7 +736,7 @@ export default function TeacherDashboard() {
               </div>
 
               <div className="assignment-workbench teacher-assignment-workspace">
-                <section className="teacher-assignment-list-panel" aria-label="Danh sách bài tập lớn">
+                <section className="teacher-assignment-list-panel" aria-label="Danh sách bài tập">
                   <div className="teacher-assignment-list-header">
                     <div>
                       <h2>Danh sách</h2>
@@ -741,7 +799,7 @@ export default function TeacherDashboard() {
                     )}
                     {!isLoadingAsms && filteredAssignments.length === 0 && (
                       <div className="assignment-list-state">
-                        {assignments.length === 0 ? "Chưa có bài tập lớn nào." : "Không tìm thấy bài tập phù hợp."}
+                        {assignments.length === 0 ? "Chưa có bài tập nào." : "Không tìm thấy bài tập phù hợp."}
                       </div>
                     )}
                     {!isLoadingAsms && filteredAssignments.map((asm) => {
@@ -769,7 +827,7 @@ export default function TeacherDashboard() {
                   </div>
                 </section>
 
-                <section className="assignment-detail-panel teacher-assignment-detail-panel" aria-label="Chi tiết bài tập lớn">
+                <section className="assignment-detail-panel teacher-assignment-detail-panel" aria-label="Chi tiết bài tập">
                   {selectedAssignment ? (
                     (() => {
                       const selectedStatus = getAssignmentStatus(selectedAssignment);
@@ -827,12 +885,15 @@ export default function TeacherDashboard() {
                           <div>
                             <h3>Lớp học</h3>
                           </div>
-                          <span className="panel-count-pill">{students.length} sinh viên</span>
                         </div>
                         <div className="assignment-people-grid">
                           <div className="people-tool">
+                            <div className="people-tool-heading">
+                              <h4>Lớp</h4>
+                              <span>Import danh sách sinh viên</span>
+                            </div>
                             <div className="form-group">
-                              <label className="form-label">Lớp</label>
+                              <label className="form-label">Tên lớp</label>
                               <input
                                 className="form-control"
                                 value={classSection}
@@ -840,7 +901,6 @@ export default function TeacherDashboard() {
                                 placeholder="IT3180-01"
                               />
                             </div>
-                            <h4>Sinh viên</h4>
                             <input
                               type="file"
                               accept=".csv,.xlsx,.xls"
@@ -858,7 +918,10 @@ export default function TeacherDashboard() {
                             </button>
                           </div>
                           <div className="people-tool">
-                            <h4>Cộng tác</h4>
+                            <div className="people-tool-heading">
+                              <h4>Cộng tác</h4>
+                              <span>Giảng viên hỗ trợ</span>
+                            </div>
                             <form onSubmit={handleAddTeacher} className="compact-inline-form">
                               <input
                                 type="email"
@@ -878,37 +941,86 @@ export default function TeacherDashboard() {
                         {uploadMessage && <div className="notice success">{uploadMessage}</div>}
                         {uploadError && <div className="notice danger">{uploadError}</div>}
                         <div className="student-mini-table">
-                          {isLoadingStudents && <p>Đang tải danh sách sinh viên...</p>}
-                          {!isLoadingStudents && students.length === 0 && <p>Chưa có sinh viên trong bài tập này.</p>}
-                          {!isLoadingStudents && classRosters.length > 0 && (
-                            <div className="class-roster-tabs">
-                              {classRosters.map((roster) => (
-                                <button
-                                  key={roster.name}
-                                  className={selectedClassName === roster.name ? "active" : ""}
-                                  onClick={() => setSelectedClassName(roster.name)}
-                                >
-                                  {roster.name} <span>{roster.student_count}</span>
-                                </button>
-                              ))}
+                          <div className="student-roster-card">
+                            <div className="student-roster-header">
+                              <div>
+                                <h4>Danh sách sinh viên</h4>
+                                <p>{classRosters.length > 0 ? "Theo lớp đã chọn" : "Toàn bộ sinh viên"}</p>
+                              </div>
+                              {!isLoadingStudents && students.length > 0 && (
+                                <span>{activeRosterStudents.length} sinh viên</span>
+                              )}
                             </div>
-                          )}
-                          {!isLoadingStudents && students.length > 0 && (
-                            <table className="mock-table">
-                              <thead>
-                                <tr><th>MSSV</th><th>Họ tên</th><th>Email</th></tr>
-                              </thead>
-                              <tbody>
-                                {(classRosters.find((roster) => roster.name === selectedClassName)?.students || students).slice(0, 8).map((student) => (
-                                  <tr key={student.id}>
-                                    <td>{student.mssv}</td>
-                                    <td>{student.name}</td>
-                                    <td>{student.email}</td>
-                                  </tr>
+                            {isLoadingStudents && <p className="student-roster-state">Đang tải danh sách sinh viên...</p>}
+                            {!isLoadingStudents && students.length === 0 && <p className="student-roster-state">Chưa có sinh viên trong bài tập này.</p>}
+                            {!isLoadingStudents && classRosters.length > 0 && (
+                              <div className="class-roster-tabs">
+                                {classRosters.map((roster) => (
+                                  <button
+                                    key={roster.name}
+                                    className={selectedClassName === roster.name ? "active" : ""}
+                                    onClick={() => {
+                                      setSelectedClassName(roster.name);
+                                      setStudentRosterPage(1);
+                                    }}
+                                  >
+                                    {rosterDisplayName(roster.name)} <span>{roster.student_count}</span>
+                                  </button>
                                 ))}
-                              </tbody>
-                            </table>
-                          )}
+                              </div>
+                            )}
+                            {!isLoadingStudents && students.length > 0 && (
+                              <>
+                                <div className="student-roster-list">
+                                  {pagedRosterStudents.map((student) => (
+                                    <div key={student.id} className="student-roster-row">
+                                      <span className="student-roster-id">{student.mssv}</span>
+                                      <div className="student-roster-person">
+                                        <strong>{student.name}</strong>
+                                        <span>{student.email}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="student-roster-pagination" aria-label="Phân trang danh sách sinh viên">
+                                  <span className="student-roster-page-summary">
+                                    {studentRosterFrom}-{studentRosterTo} / {activeRosterStudents.length} sinh viên
+                                  </span>
+                                  <div className="student-roster-page-controls">
+                                    <button
+                                      type="button"
+                                      onClick={() => setStudentRosterPage(Math.max(1, currentStudentRosterPage - 1))}
+                                      disabled={currentStudentRosterPage === 1}
+                                    >
+                                      Trước
+                                    </button>
+                                    {studentRosterPageItems.map((item, index) => (
+                                      item === "gap" ? (
+                                        <span key={`gap-${index}`} className="student-roster-page-gap">...</span>
+                                      ) : (
+                                        <button
+                                          key={item}
+                                          type="button"
+                                          className={currentStudentRosterPage === item ? "active" : ""}
+                                          aria-current={currentStudentRosterPage === item ? "page" : undefined}
+                                          onClick={() => setStudentRosterPage(item)}
+                                        >
+                                          {item}
+                                        </button>
+                                      )
+                                    ))}
+                                    <button
+                                      type="button"
+                                      onClick={() => setStudentRosterPage(Math.min(studentRosterTotalPages, currentStudentRosterPage + 1))}
+                                      disabled={currentStudentRosterPage === studentRosterTotalPages}
+                                    >
+                                      Sau
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </>
@@ -1005,7 +1117,7 @@ export default function TeacherDashboard() {
                             className={selectedClassName === roster.name ? "active" : ""}
                             onClick={() => setSelectedClassName(roster.name)}
                           >
-                            {roster.name} <span>{roster.student_count}</span>
+                            {rosterDisplayName(roster.name)} <span>{roster.student_count}</span>
                           </button>
                         ))}
                       </div>
@@ -1033,7 +1145,7 @@ export default function TeacherDashboard() {
               {false && isLoadingAsms && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải bài tập...</p>}
               {false && !isLoadingAsms && assignments.length === 0 && (
                 <div className="tech-panel" style={{ textAlign: "center", padding: "3rem" }}>
-                  <p style={{ color: "hsl(var(--text-muted))" }}>Chưa có bài tập lớn nào được tạo.</p>
+                  <p style={{ color: "hsl(var(--text-muted))" }}>Chưa có bài tập nào được tạo.</p>
                 </div>
               )}
 
@@ -1081,12 +1193,12 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Đăng ký sinh viên bằng CSV/Excel</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2.5rem" }}>
-                Tải lên tệp CSV hoặc Excel chứa danh sách lớp để đăng ký sinh viên vào một bài tập lớn cụ thể.
+                Tải lên tệp CSV hoặc Excel chứa danh sách lớp để đăng ký sinh viên vào một bài tập cụ thể.
               </p>
 
               <div className="tech-panel" style={{ marginBottom: "2rem" }}>
                 <div className="form-group" style={{ maxWidth: "400px" }}>
-                  <label className="form-label">Chọn bài tập lớn đích</label>
+                  <label className="form-label">Chọn bài tập đích</label>
                   <select
                     className="form-control"
                     value={selectedAssignmentId}
@@ -1160,7 +1272,7 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Thêm giảng viên hợp tác</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Cấp quyền cho giảng viên khác tham gia quản lý, chấm điểm và chỉnh sửa bài tập lớn.
+                Cấp quyền cho giảng viên khác tham gia quản lý, chấm điểm và chỉnh sửa bài tập.
               </p>
 
               <form onSubmit={handleAddTeacher} style={{ display: "flex", gap: "1rem", marginBottom: "2rem", maxWidth: "500px" }}>
@@ -1203,7 +1315,7 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Danh sách sinh viên tham gia</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Xem danh sách sinh viên được phân bổ và cấp quyền nộp bài tại các bài tập lớn.
+                Xem danh sách sinh viên được phân bổ và cấp quyền nộp bài tại các bài tập.
               </p>
 
               <AssignmentPicker assignments={assignments} selectedAssignmentId={selectedAssignmentId} setSelectedAssignmentId={setSelectedAssignmentId} />
@@ -1242,7 +1354,7 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Thống kê khảo sát</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Thống kê các đánh giá phản hồi gợi ý testcase từ sinh viên cho bài tập lớn.
+                Thống kê các đánh giá phản hồi gợi ý testcase từ sinh viên cho bài tập.
               </p>
 
               <AssignmentPicker assignments={assignments} selectedAssignmentId={selectedAssignmentId} setSelectedAssignmentId={setSelectedAssignmentId} />
@@ -1314,13 +1426,13 @@ export default function TeacherDashboard() {
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
-              <h3 className="modal-title">{editingAssignmentId ? "Sửa bài tập" : "Tạo bài tập lớn mới"}</h3>
+              <h3 className="modal-title">{editingAssignmentId ? "Sửa bài tập" : "Tạo bài tập mới"}</h3>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>×</button>
             </div>
             <form onSubmit={handleAddAssignment}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="form-label">Tên bài tập lớn</label>
+                  <label className="form-label">Tên bài tập</label>
                   <input
                     type="text"
                     className="form-control"
@@ -1562,14 +1674,14 @@ function AssignmentPicker({
   return (
     <div className="tech-panel" style={{ marginBottom: "2rem" }}>
       <div className="form-group" style={{ maxWidth: "400px" }}>
-        <label className="form-label">Chọn bài tập lớn</label>
+        <label className="form-label">Chọn bài tập</label>
         <select
           className="form-control"
           value={selectedAssignmentId}
           onChange={(e) => setSelectedAssignmentId(e.target.value)}
           style={{ background: "white" }}
         >
-          <option value="" disabled>-- Chọn bài tập lớn --</option>
+          <option value="" disabled>-- Chọn bài tập --</option>
           {assignments.map((assignment) => (
             <option key={assignment.id} value={assignment.id}>
               {assignment.name}

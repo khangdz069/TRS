@@ -1,33 +1,42 @@
-/* Ocean Blue interface system for TRS Rebuild */
+/* Soft gray interface system for TRS Rebuild */
 
 :root {
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  --font-mono: var(--font-geist-mono), "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-sans: var(--font-be-vietnam), "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 
-  --bg-base: 204 60% 97%;
+  --bg-base: 220 27% 98%;
   --bg-surface: 0 0% 100%;
-  --bg-card: 203 57% 96%;
-  --bg-soft: 198 78% 94%;
+  --bg-card: 220 16% 96%;
+  --bg-soft: 220 14% 93%;
 
-  --border-color: 203 34% 84%;
-  --border-strong: 202 58% 66%;
-  --border-glow: 198 83% 44%;
+  --border-color: 0 0% 84%;
+  --border-strong: 0 0% 70%;
+  --border-glow: 0 0% 56%;
 
-  --text-primary: 211 55% 15%;
-  --text-secondary: 210 24% 37%;
-  --text-muted: 211 16% 53%;
+  --text-primary: 0 0% 14%;
+  --text-secondary: 0 0% 36%;
+  --text-muted: 0 0% 48%;
 
   --color-primary: 199 92% 38%;
   --color-primary-strong: 205 87% 30%;
   --color-secondary: 176 61% 39%;
   --color-accent: 13 84% 62%;
-  --color-success: 158 64% 36%;
+  --color-success: 158 50% 34%;
   --color-warning: 38 89% 46%;
   --color-danger: 0 72% 51%;
 
-  --shadow-sm: 0 1px 2px rgba(15, 65, 96, 0.08);
-  --shadow-md: 0 10px 28px rgba(14, 72, 111, 0.1);
-  --shadow-lg: 0 20px 60px rgba(10, 71, 111, 0.16);
+  --action-bg: 199 92% 38%;
+  --action-bg-hover: 205 87% 30%;
+  --action-bg-active: 205 90% 24%;
+  --action-soft: 198 86% 94%;
+  --action-soft-hover: 198 82% 90%;
+  --action-border: 198 64% 78%;
+  --action-ring: rgba(14, 165, 233, 0.16);
+  --action-shadow: rgba(2, 132, 199, 0.20);
+
+  --shadow-sm: 0 1px 2px rgba(33, 41, 54, 0.06);
+  --shadow-md: 0 10px 28px rgba(33, 41, 54, 0.08);
+  --shadow-lg: 0 20px 60px rgba(33, 41, 54, 0.12);
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -47,8 +56,7 @@ html {
 }
 
 body {
-  background:
-    linear-gradient(180deg, hsl(199 100% 98%) 0%, hsl(204 64% 97%) 42%, hsl(210 45% 96%) 100%);
+  background: hsl(var(--bg-base));
   color: hsl(var(--text-primary));
   font-family: var(--font-sans);
   min-height: 100%;
@@ -80,7 +88,7 @@ a {
 }
 
 ::selection {
-  background: hsl(196 92% 83%);
+  background: hsl(var(--bg-soft));
   color: hsl(var(--text-primary));
 }
 
@@ -90,9 +98,9 @@ a {
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(135deg, rgba(214, 242, 255, 0.92), rgba(255, 255, 255, 0.56) 34%, rgba(226, 246, 241, 0.74)),
-    repeating-linear-gradient(90deg, rgba(12, 112, 156, 0.035) 0 1px, transparent 1px 96px),
-    repeating-linear-gradient(0deg, rgba(12, 112, 156, 0.03) 0 1px, transparent 1px 96px);
+    linear-gradient(135deg, rgba(248, 249, 251, 0.98), rgba(255, 255, 255, 0.68) 38%, rgba(244, 246, 249, 0.82)),
+    repeating-linear-gradient(90deg, rgba(103, 112, 128, 0.04) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(0deg, rgba(103, 112, 128, 0.035) 0 1px, transparent 1px 96px);
 }
 
 .container {
@@ -104,7 +112,7 @@ a {
 
 .header {
   border-bottom: 1px solid hsl(var(--border-color));
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(248, 249, 251, 0.92);
   backdrop-filter: blur(16px);
   position: sticky;
   top: 0;
@@ -137,14 +145,14 @@ a {
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: hsl(var(--color-primary));
+  background: hsl(var(--action-bg));
   color: white;
-  box-shadow: 0 10px 22px rgba(2, 132, 199, 0.22);
+  box-shadow: 0 10px 22px var(--action-shadow);
   font-size: 1rem;
 }
 
 .logo-badge {
-  color: hsl(var(--color-primary));
+  color: hsl(var(--action-bg-hover));
   font-weight: 850;
 }
 
@@ -185,9 +193,11 @@ a {
   align-items: center;
   padding: 4.5rem 0 3rem;
   overflow: hidden;
+  background-color: hsl(var(--bg-base));
   background-image:
-    linear-gradient(90deg, rgba(248, 253, 255, 0.96) 0%, rgba(248, 253, 255, 0.86) 40%, rgba(248, 253, 255, 0.44) 68%, rgba(248, 253, 255, 0.2) 100%),
+    linear-gradient(90deg, rgba(248, 249, 251, 0.98) 0%, rgba(248, 249, 251, 0.94) 44%, rgba(248, 249, 251, 0.78) 72%, rgba(248, 249, 251, 0.68) 100%),
     url("/assets/ocean-learning-hero.png");
+  background-blend-mode: normal, luminosity;
   background-size: cover;
   background-position: center right;
 }
@@ -245,7 +255,7 @@ a {
 }
 
 .hero-title span {
-  color: hsl(var(--color-primary));
+  color: hsl(var(--action-bg-hover));
 }
 
 .hero-desc {
@@ -273,7 +283,7 @@ a {
 
 .hero-stat {
   min-height: 90px;
-  border: 1px solid rgba(7, 89, 133, 0.14);
+  border: 1px solid rgba(118, 128, 143, 0.24);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(10px);
@@ -298,7 +308,7 @@ a {
 .portal-panel {
   min-width: 0;
   background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(7, 89, 133, 0.16);
+  border: 1px solid rgba(118, 128, 143, 0.28);
   border-radius: 8px;
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(18px);
@@ -431,15 +441,15 @@ a {
 }
 
 .sidebar-toggle:hover {
-  border-color: hsl(198 64% 78%);
+  border-color: hsl(var(--border-strong));
   background: hsl(var(--bg-soft));
-  box-shadow: 0 10px 22px rgba(14, 116, 144, 0.12);
+  box-shadow: 0 10px 22px rgba(80, 92, 115, 0.12);
 }
 
 .sidebar-toggle[aria-pressed="true"] {
   color: white;
-  border-color: hsl(var(--color-primary));
-  background: hsl(var(--color-primary));
+  border-color: hsl(var(--action-bg));
+  background: hsl(var(--action-bg));
 }
 
 .sidebar-title {
@@ -486,7 +496,7 @@ a {
 
 .sidebar-selected-assignment {
   background: rgba(255, 255, 255, 0.72);
-  border: 1px solid hsl(203 34% 88%);
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   min-width: 0;
   padding: 0.55rem 0.65rem;
@@ -529,6 +539,98 @@ a {
   width: 100%;
 }
 
+.sidebar-account {
+  border-top: 1px solid hsl(var(--border-color));
+  display: grid;
+  gap: 0.55rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  width: 100%;
+}
+
+.sidebar-user-card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  min-width: 0;
+  padding: 0.72rem 0.75rem;
+}
+
+.sidebar-user-card span {
+  color: hsl(var(--text-muted));
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.sidebar-user-card strong {
+  color: hsl(var(--text-primary));
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  margin-top: 0.2rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-logout-button {
+  align-items: center;
+  background: hsl(0 85% 97%);
+  border: 1px solid hsl(0 72% 86%);
+  border-radius: 8px;
+  color: hsl(var(--color-danger));
+  cursor: pointer;
+  display: flex;
+  font-weight: 800;
+  gap: 0.65rem;
+  min-height: 40px;
+  padding: 0.62rem 0.75rem;
+  text-align: left;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  width: 100%;
+}
+
+.sidebar-logout-button:hover {
+  background: hsl(0 85% 95%);
+  border-color: hsl(0 72% 75%);
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.1);
+}
+
+.sidebar-logout-icon {
+  border: 2px solid currentColor;
+  border-right: 0;
+  border-radius: 4px 0 0 4px;
+  flex: 0 0 auto;
+  height: 18px;
+  position: relative;
+  width: 18px;
+}
+
+.sidebar-logout-icon::before {
+  background: currentColor;
+  border-radius: 999px;
+  content: "";
+  height: 2px;
+  position: absolute;
+  right: -8px;
+  top: 6px;
+  width: 12px;
+}
+
+.sidebar-logout-icon::after {
+  border-right: 2px solid currentColor;
+  border-top: 2px solid currentColor;
+  content: "";
+  height: 7px;
+  position: absolute;
+  right: -9px;
+  top: 3px;
+  transform: rotate(45deg);
+  width: 7px;
+}
+
 .sidebar-label {
   min-width: 0;
 }
@@ -542,7 +644,7 @@ a {
   flex: 0 0 auto;
   position: relative;
   color: hsl(var(--color-primary-strong));
-  background: rgba(14, 165, 233, 0.12);
+  background: rgba(80, 92, 115, 0.12);
 }
 
 .sidebar-icon::before,
@@ -673,9 +775,9 @@ a {
 .sidebar-link.active,
 .sidebar-sub-link:hover,
 .sidebar-sub-link.active {
-  color: hsl(var(--color-primary-strong));
-  background: hsl(var(--bg-soft));
-  border-color: hsl(198 64% 82%);
+  color: hsl(var(--action-bg-hover));
+  background: hsl(var(--action-soft));
+  border-color: hsl(var(--action-border));
 }
 
 .sidebar-link:hover .sidebar-icon,
@@ -683,7 +785,7 @@ a {
 .sidebar-sub-link:hover .sidebar-icon,
 .sidebar-sub-link.active .sidebar-icon {
   color: white;
-  background: hsl(var(--color-primary));
+  background: hsl(var(--action-bg));
 }
 
 .sidebar-link:disabled {
@@ -716,6 +818,16 @@ a {
   display: none;
 }
 
+.sidebar.collapsed .sidebar-account {
+  align-items: center;
+  border-top: 0;
+  padding-top: 0.2rem;
+}
+
+.sidebar.collapsed .sidebar-user-card {
+  display: none;
+}
+
 .sidebar.collapsed .sidebar-link {
   justify-content: center;
   gap: 0;
@@ -725,6 +837,13 @@ a {
 .sidebar.collapsed .sidebar-sub-link {
   justify-content: center;
   gap: 0;
+  padding: 0.55rem;
+}
+
+.sidebar.collapsed .sidebar-logout-button {
+  justify-content: center;
+  gap: 0;
+  min-height: 38px;
   padding: 0.55rem;
 }
 
@@ -750,7 +869,7 @@ a {
   border-radius: 8px;
   border: 1px solid hsl(var(--border-color));
   background-image:
-    linear-gradient(180deg, rgba(5, 72, 108, 0.08), rgba(5, 72, 108, 0.28)),
+    linear-gradient(180deg, rgba(47, 57, 72, 0.08), rgba(47, 57, 72, 0.24)),
     url("/assets/ocean-learning-hero.png");
   background-size: cover;
   background-position: center;
@@ -798,7 +917,7 @@ a {
   place-items: center;
   margin-bottom: 1.1rem;
   color: white;
-  background: hsl(var(--color-primary));
+  background: hsl(var(--action-bg));
   font-weight: 850;
 }
 
@@ -887,8 +1006,8 @@ a {
 
 .form-control:focus {
   outline: none;
-  border-color: hsl(var(--color-primary));
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.16);
+  border-color: hsl(var(--action-border));
+  box-shadow: 0 0 0 3px var(--action-ring);
 }
 
 textarea.form-control {
@@ -920,27 +1039,34 @@ option {
 }
 
 .btn-primary {
-  background: hsl(var(--color-primary));
+  background: hsl(var(--action-bg));
   color: white;
-  border-color: hsl(var(--color-primary));
+  border-color: hsl(var(--action-bg));
 }
 
 .btn-primary:hover {
-  background: hsl(var(--color-primary-strong));
-  border-color: hsl(var(--color-primary-strong));
+  background: hsl(var(--action-bg-hover));
+  border-color: hsl(var(--action-bg-hover));
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(2, 132, 199, 0.2);
+  box-shadow: 0 12px 24px var(--action-shadow);
+}
+
+.btn-primary:active {
+  background: hsl(var(--action-bg-active));
+  border-color: hsl(var(--action-bg-active));
+  transform: translateY(0);
 }
 
 .btn-secondary {
   background: white;
-  color: hsl(var(--color-primary-strong));
-  border-color: hsl(var(--border-color));
+  color: hsl(var(--action-bg-hover));
+  border-color: hsl(var(--border-strong));
 }
 
 .btn-secondary:hover {
-  background: hsl(var(--bg-card));
-  border-color: hsl(var(--border-strong));
+  background: hsl(var(--action-soft));
+  border-color: hsl(var(--action-border));
+  color: hsl(var(--action-bg-active));
 }
 
 .btn-success {
@@ -976,9 +1102,9 @@ option {
 .upload-zone:hover,
 .upload-zone.active,
 .upload-zone.drag-active {
-  border-color: hsl(var(--color-primary));
-  background: hsl(198 82% 95%);
-  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.08);
+  border-color: hsl(var(--action-border));
+  background: hsl(var(--action-soft));
+  box-shadow: inset 0 0 0 1px var(--action-ring);
 }
 
 .upload-icon {
@@ -1084,8 +1210,8 @@ option {
 
 .tech-panel.active-border,
 .tech-panel:hover.active-border {
-  border-color: hsl(var(--color-primary));
-  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.12);
+  border-color: hsl(var(--action-border));
+  box-shadow: 0 12px 28px var(--action-ring);
 }
 
 .tech-panel-title {
@@ -1124,7 +1250,7 @@ option {
 .tech-val {
   font-family: var(--font-mono);
   font-size: 0.9rem;
-  color: hsl(var(--color-primary-strong));
+  color: hsl(var(--action-bg-hover));
   overflow-wrap: anywhere;
 }
 
@@ -1159,7 +1285,7 @@ option {
 
 .mock-table td {
   padding: 0.88rem 0.95rem;
-  border-bottom: 1px solid hsl(204 37% 91%);
+  border-bottom: 1px solid hsl(var(--border-color));
   font-size: 0.94rem;
 }
 
@@ -1194,8 +1320,9 @@ option {
 }
 
 .mock-badge.primary {
-  background: hsl(198 83% 94%);
-  color: hsl(var(--color-primary-strong));
+  background: hsl(var(--action-soft));
+  border: 1px solid hsl(var(--action-border));
+  color: hsl(var(--action-bg-hover));
 }
 
 .teacher-header-actions {
@@ -1233,7 +1360,7 @@ option {
   background: hsl(var(--bg-surface));
   border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
-  box-shadow: 0 14px 34px rgba(14, 72, 111, 0.08);
+  box-shadow: 0 14px 34px rgba(33, 41, 54, 0.08);
   margin-bottom: 0.9rem;
   overflow: hidden;
 }
@@ -1266,7 +1393,7 @@ option {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.85rem;
   padding: 1rem 1.15rem 1.15rem;
-  background: hsl(204 60% 98%);
+  background: hsl(var(--bg-base));
 }
 
 .teacher-metric-tile {
@@ -1288,7 +1415,7 @@ option {
   position: absolute;
   inset: 0 auto 0 0;
   width: 4px;
-  background: hsl(var(--color-primary));
+  background: hsl(var(--action-bg));
 }
 
 .teacher-metric-tile span {
@@ -1374,7 +1501,7 @@ option {
 
 .teacher-assignment-stats div {
   background: rgba(255, 255, 255, 0.72);
-  border: 1px solid hsl(203 34% 86%);
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
   padding: 0.72rem 0.78rem;
@@ -1404,14 +1531,15 @@ option {
   position: sticky;
   top: 88px;
   align-self: start;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid hsl(203 34% 86%);
+  background: white;
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   overflow: hidden;
 }
 
 .teacher-assignment-list-header {
-  padding: 0.9rem 0.9rem 0.55rem;
+  border-bottom: 1px solid hsl(var(--border-color));
+  padding: 0.95rem 1rem 0.75rem;
 }
 
 .teacher-assignment-list-header h2 {
@@ -1427,40 +1555,45 @@ option {
 
 .teacher-assignment-list-tools {
   display: grid;
-  gap: 0.62rem;
-  padding: 0 0.75rem 0.8rem;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem 0;
 }
 
 .teacher-assignment-filter-tabs {
-  background: hsl(204 46% 96%);
-  border: 1px solid hsl(203 34% 86%);
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border-color));
+  border-top: 1px solid hsl(var(--border-color));
+  border-radius: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.18rem;
-  padding: 0.18rem;
+  gap: 0;
+  margin: 0.25rem -1rem 0;
+  padding: 0 1rem;
 }
 
 .teacher-assignment-filter-tabs button {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   color: hsl(var(--text-secondary));
   cursor: pointer;
   display: inline-flex;
   font-size: 0.74rem;
   font-weight: 800;
   justify-content: center;
-  min-height: 31px;
-  padding: 0.25rem 0.35rem;
+  min-height: 40px;
+  padding: 0.32rem 0.35rem 0.22rem;
   white-space: nowrap;
 }
 
 .teacher-assignment-filter-tabs button.active {
-  background: white;
-  color: hsl(var(--color-primary-strong));
-  box-shadow: 0 1px 4px rgba(14, 72, 111, 0.12);
+  background: transparent;
+  border-bottom-color: hsl(var(--action-bg));
+  color: hsl(var(--action-bg-hover));
+  box-shadow: none;
 }
 
 .teacher-assignment-filter-tabs span {
@@ -1470,24 +1603,25 @@ option {
 }
 
 .teacher-assignment-list-scroll {
-  border-top: 1px solid hsl(203 34% 86%);
+  border-top: 0;
   max-height: calc(100vh - 330px);
   overflow: auto;
-  padding: 0.5rem;
+  padding: 0;
 }
 
 .teacher-assignment-row {
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border-color));
+  border-radius: 0;
   color: hsl(var(--text-primary));
   cursor: pointer;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   grid-template-areas: "dot main state";
   gap: 0.24rem 0.6rem;
-  margin-bottom: 0.36rem;
-  padding: 0.68rem;
+  margin-bottom: 0;
+  padding: 0.82rem 1rem;
   text-align: left;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   width: 100%;
@@ -1495,12 +1629,16 @@ option {
 
 .teacher-assignment-row:hover,
 .teacher-assignment-row.selected {
-  background: white;
-  border-color: hsl(var(--border-strong));
+  background: hsl(199 100% 97%);
+  border-color: hsl(var(--border-color));
 }
 
 .teacher-assignment-row.selected {
-  box-shadow: inset 3px 0 0 hsl(var(--color-primary));
+  box-shadow: inset 3px 0 0 hsl(var(--action-bg));
+}
+
+.teacher-assignment-row:last-child {
+  border-bottom: 0;
 }
 
 .teacher-assignment-status-dot {
@@ -1541,24 +1679,23 @@ option {
 
 .teacher-assignment-row-state {
   align-items: center;
-  border-radius: 999px;
+  background: transparent;
+  border-radius: 0;
   display: inline-flex;
-  font-size: 0.7rem;
+  font-size: 0.74rem;
   font-weight: 850;
   grid-area: state;
   justify-self: end;
-  min-height: 22px;
-  padding: 0.12rem 0.48rem;
+  min-height: auto;
+  padding: 0;
   white-space: nowrap;
 }
 
 .teacher-assignment-row-state.open {
-  background: hsl(154 68% 94%);
   color: hsl(var(--color-success));
 }
 
 .teacher-assignment-row-state.closed {
-  background: hsl(42 100% 94%);
   color: hsl(var(--color-warning));
 }
 
@@ -1567,10 +1704,10 @@ option {
 }
 
 .teacher-assignment-detail-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), hsl(204 60% 98%));
-  border: 1px solid hsl(203 34% 84%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), hsl(var(--bg-base)));
+  border: 1px solid hsl(var(--border-strong));
   border-radius: 8px;
-  box-shadow: 0 16px 36px rgba(14, 72, 111, 0.08);
+  box-shadow: 0 16px 36px rgba(33, 41, 54, 0.08);
   display: grid;
   gap: 1rem;
   min-width: 0;
@@ -1654,8 +1791,8 @@ option {
 }
 
 .teacher-assignment-testcases div {
-  background: hsl(198 78% 95%);
-  border: 1px solid hsl(198 64% 82%);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   padding: 0.85rem 0.95rem;
 }
@@ -1666,7 +1803,7 @@ option {
 }
 
 .teacher-assignment-detail-panel .assignment-people-panel {
-  box-shadow: none;
+  box-shadow: 0 16px 36px rgba(33, 41, 54, 0.08);
 }
 
 .assignment-command-panel {
@@ -1705,7 +1842,7 @@ option {
   top: 88px;
   align-self: start;
   background: rgba(255, 255, 255, 0.58);
-  border: 1px solid hsl(203 34% 88%);
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   box-shadow: none;
   overflow: hidden;
@@ -1753,8 +1890,8 @@ option {
 }
 
 .assignment-search-control:focus-within {
-  border-color: hsl(var(--color-primary));
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
+  border-color: hsl(var(--action-border));
+  box-shadow: 0 0 0 3px var(--action-ring);
 }
 
 .assignment-search-icon {
@@ -1841,7 +1978,7 @@ option {
   overflow: auto;
   padding: 0.45rem;
   background: transparent;
-  border-top: 1px solid hsl(203 34% 88%);
+  border-top: 1px solid hsl(var(--border-color));
 }
 
 .assignment-list-state {
@@ -1872,12 +2009,12 @@ option {
 
 .assignment-list-item:hover,
 .assignment-list-item.selected {
-  background: white;
-  border-color: hsl(var(--border-strong));
+  background: hsl(var(--action-soft));
+  border-color: hsl(var(--action-border));
 }
 
 .assignment-list-item.selected {
-  box-shadow: inset 3px 0 0 hsl(var(--color-primary));
+  box-shadow: inset 3px 0 0 hsl(var(--action-bg));
 }
 
 .assignment-status-dot {
@@ -1973,7 +2110,7 @@ option {
 
 .student-assignment-stats div {
   background: rgba(255, 255, 255, 0.72);
-  border: 1px solid hsl(203 34% 86%);
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
   padding: 0.72rem 0.78rem;
@@ -2005,14 +2142,15 @@ option {
   position: sticky;
   top: 88px;
   align-self: start;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid hsl(203 34% 86%);
+  background: white;
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   overflow: hidden;
 }
 
 .student-assignment-list-header {
-  padding: 0.9rem 0.9rem 0.55rem;
+  border-bottom: 1px solid hsl(var(--border-color));
+  padding: 0.95rem 1rem 0.75rem;
 }
 
 .student-assignment-list-header h2 {
@@ -2028,40 +2166,45 @@ option {
 
 .student-assignment-list-tools {
   display: grid;
-  gap: 0.62rem;
-  padding: 0 0.75rem 0.8rem;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem 0;
 }
 
 .student-assignment-filter-tabs {
-  background: hsl(204 46% 96%);
-  border: 1px solid hsl(203 34% 86%);
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border-color));
+  border-top: 1px solid hsl(var(--border-color));
+  border-radius: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.18rem;
-  padding: 0.18rem;
+  gap: 0;
+  margin: 0.25rem -1rem 0;
+  padding: 0 1rem;
 }
 
 .student-assignment-filter-tabs button {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   color: hsl(var(--text-secondary));
   cursor: pointer;
   display: inline-flex;
   font-size: 0.74rem;
   font-weight: 800;
   justify-content: center;
-  min-height: 31px;
-  padding: 0.25rem 0.35rem;
+  min-height: 40px;
+  padding: 0.32rem 0.35rem 0.22rem;
   white-space: nowrap;
 }
 
 .student-assignment-filter-tabs button.active {
-  background: white;
-  color: hsl(var(--color-primary-strong));
-  box-shadow: 0 1px 4px rgba(14, 72, 111, 0.12);
+  background: transparent;
+  border-bottom-color: hsl(var(--action-bg));
+  color: hsl(var(--action-bg-hover));
+  box-shadow: none;
 }
 
 .student-assignment-filter-tabs span {
@@ -2071,16 +2214,17 @@ option {
 }
 
 .student-assignment-list-scroll {
-  border-top: 1px solid hsl(203 34% 86%);
+  border-top: 0;
   max-height: calc(100vh - 330px);
   overflow: auto;
-  padding: 0.5rem;
+  padding: 0;
 }
 
 .student-assignment-row {
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--border-color));
+  border-radius: 0;
   color: hsl(var(--text-primary));
   cursor: pointer;
   display: grid;
@@ -2088,8 +2232,8 @@ option {
   grid-template-areas:
     "dot main state";
   gap: 0.24rem 0.6rem;
-  margin-bottom: 0.36rem;
-  padding: 0.68rem;
+  margin-bottom: 0;
+  padding: 0.82rem 1rem;
   text-align: left;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
   width: 100%;
@@ -2097,12 +2241,16 @@ option {
 
 .student-assignment-row:hover,
 .student-assignment-row.selected {
-  background: white;
-  border-color: hsl(var(--border-strong));
+  background: hsl(199 100% 97%);
+  border-color: hsl(var(--border-color));
 }
 
 .student-assignment-row.selected {
-  box-shadow: inset 3px 0 0 hsl(var(--color-primary));
+  box-shadow: inset 3px 0 0 hsl(var(--action-bg));
+}
+
+.student-assignment-row:last-child {
+  border-bottom: 0;
 }
 
 .student-assignment-status-dot {
@@ -2144,24 +2292,23 @@ option {
 
 .student-assignment-row-state {
   align-items: center;
-  border-radius: 999px;
+  background: transparent;
+  border-radius: 0;
   display: inline-flex;
-  font-size: 0.7rem;
+  font-size: 0.74rem;
   font-weight: 850;
   grid-area: state;
   justify-self: end;
-  min-height: 22px;
-  padding: 0.12rem 0.48rem;
+  min-height: auto;
+  padding: 0;
   white-space: nowrap;
 }
 
 .student-assignment-row-state.open {
-  background: hsl(154 68% 94%);
   color: hsl(var(--color-success));
 }
 
 .student-assignment-row-state.closed {
-  background: hsl(42 100% 94%);
   color: hsl(var(--color-warning));
 }
 
@@ -2170,10 +2317,10 @@ option {
 }
 
 .student-assignment-detail-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), hsl(204 60% 98%));
-  border: 1px solid hsl(203 34% 84%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), hsl(var(--bg-base)));
+  border: 1px solid hsl(var(--border-strong));
   border-radius: 8px;
-  box-shadow: 0 16px 36px rgba(14, 72, 111, 0.08);
+  box-shadow: 0 16px 36px rgba(33, 41, 54, 0.08);
   min-width: 0;
   overflow: hidden;
 }
@@ -2283,7 +2430,7 @@ option {
   background: hsl(var(--bg-surface));
   border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
-  box-shadow: 0 14px 34px rgba(14, 72, 111, 0.08);
+  box-shadow: 0 14px 34px rgba(33, 41, 54, 0.08);
   overflow: hidden;
 }
 
@@ -2295,7 +2442,7 @@ option {
   background: hsl(var(--bg-surface));
   border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
-  box-shadow: 0 14px 34px rgba(14, 72, 111, 0.08);
+  box-shadow: 0 14px 34px rgba(33, 41, 54, 0.08);
   padding: 1.35rem 1.45rem;
 }
 
@@ -2330,7 +2477,7 @@ option {
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.55fr);
   gap: 1rem;
   background:
-    linear-gradient(135deg, hsl(198 86% 97%), white);
+    linear-gradient(135deg, hsl(var(--bg-card)), white);
   border-bottom: 1px solid hsl(var(--border-color));
   padding: 1.15rem 1.45rem;
 }
@@ -2362,7 +2509,7 @@ option {
 .assignment-profile-chips span {
   align-items: center;
   background: white;
-  border: 1px solid hsl(198 66% 82%);
+  border: 1px solid hsl(var(--border-strong));
   border-radius: 999px;
   color: hsl(var(--color-primary-strong));
   display: inline-flex;
@@ -2422,7 +2569,7 @@ option {
 }
 
 .assignment-overview-card .assignment-meta-grid {
-  background: hsl(204 60% 98%);
+  background: hsl(var(--bg-base));
   border-bottom: 1px solid hsl(var(--border-color));
   gap: 0;
   padding: 0;
@@ -2446,7 +2593,7 @@ option {
   gap: 0.55rem 0.8rem;
   align-items: center;
   color: hsl(var(--text-muted));
-  background: hsl(198 86% 96%);
+  background: hsl(var(--bg-card));
   border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   padding: 0.9rem 1rem;
@@ -2504,8 +2651,8 @@ option {
 
 .assignment-card:hover,
 .assignment-card.selected {
-  border-color: hsl(var(--color-primary));
-  background: hsl(198 86% 97%);
+  border-color: hsl(var(--action-border));
+  background: hsl(var(--action-soft));
 }
 
 .assignment-card:hover {
@@ -2571,8 +2718,8 @@ option {
 
 .assignment-type-option.selected,
 .language-chip.selected {
-  border-color: hsl(var(--color-primary));
-  background: hsl(198 86% 95%);
+  border-color: hsl(var(--action-border));
+  background: hsl(var(--action-soft));
 }
 
 .language-grid {
@@ -2595,7 +2742,7 @@ option {
 }
 
 .language-chip input {
-  accent-color: hsl(var(--color-primary));
+  accent-color: hsl(var(--action-bg));
 }
 
 .assignment-testcase-builder,
@@ -2625,10 +2772,31 @@ option {
 }
 
 .people-tool {
-  background: hsl(var(--bg-card));
+  align-content: start;
+  background: white;
   border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
+  display: grid;
+  gap: 0.85rem;
   padding: 1.05rem;
+}
+
+.people-tool .form-group {
+  margin-bottom: 0;
+}
+
+.people-tool-heading {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.people-tool .people-tool-heading h4 {
+  margin: 0;
+}
+
+.people-tool-heading span {
+  color: hsl(var(--text-muted));
+  font-size: 0.82rem;
 }
 
 .people-tool h4 {
@@ -2644,7 +2812,7 @@ option {
   border-radius: 8px;
   color: hsl(var(--text-secondary));
   cursor: pointer;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
   padding: 0.9rem;
 }
 
@@ -2666,8 +2834,8 @@ option {
 }
 
 .teacher-chip-list span {
-  background: hsl(198 86% 94%);
-  border: 1px solid hsl(198 66% 82%);
+  background: white;
+  border: 1px solid hsl(var(--border-strong));
   border-radius: 999px;
   color: hsl(var(--text-secondary));
   font-size: 0.8rem;
@@ -2678,32 +2846,192 @@ option {
   margin-top: 1rem;
 }
 
+.student-roster-card {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  box-shadow: 0 14px 32px rgba(33, 41, 54, 0.07);
+  overflow: hidden;
+}
+
+.student-roster-header {
+  align-items: center;
+  background: white;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.55rem;
+}
+
+.student-roster-header h4 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.student-roster-header p {
+  color: hsl(var(--text-muted));
+  font-size: 0.84rem;
+  margin-top: 0.12rem;
+}
+
+.student-roster-header > span {
+  background: hsl(var(--bg-base));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 999px;
+  color: hsl(var(--text-muted));
+  font-size: 0.84rem;
+  font-weight: 700;
+  padding: 0.28rem 0.6rem;
+  white-space: nowrap;
+}
+
+.student-roster-state {
+  color: hsl(var(--text-muted));
+  padding: 1rem;
+}
+
 .class-roster-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
+  margin: 0;
+  padding: 0.25rem 1rem 0.85rem;
 }
 
 .class-roster-tabs button {
-  background: white;
-  border: 1px solid hsl(var(--border-color));
-  border-radius: 8px;
+  background: hsl(var(--bg-base));
+  border: 1px solid transparent;
+  border-radius: 999px;
   color: hsl(var(--text-secondary));
   cursor: pointer;
-  min-height: 36px;
-  padding: 0.45rem 0.7rem;
+  font-weight: 700;
+  min-height: 34px;
+  padding: 0.4rem 0.72rem;
 }
 
 .class-roster-tabs button.active {
-  background: hsl(198 86% 94%);
-  border-color: hsl(var(--color-primary));
-  color: hsl(var(--color-primary-strong));
+  background: hsl(var(--action-soft));
+  border-color: hsl(var(--action-border));
+  color: hsl(var(--action-bg-hover));
 }
 
 .class-roster-tabs span {
   color: hsl(var(--text-muted));
   margin-left: 0.35rem;
+}
+
+.student-roster-list {
+  border-top: 1px solid hsl(var(--border-color));
+}
+
+.student-roster-row {
+  align-items: center;
+  background: white;
+  border-bottom: 1px solid hsl(var(--border-color));
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: minmax(6rem, 8rem) minmax(0, 1fr);
+  min-height: 64px;
+  padding: 0.8rem 1rem;
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+
+.student-roster-row:hover {
+  background: hsl(var(--action-soft));
+  box-shadow: inset 3px 0 0 hsl(var(--action-bg));
+}
+
+.student-roster-row:last-child {
+  border-bottom: 0;
+}
+
+.student-roster-id {
+  align-self: center;
+  background: white;
+  border: 1px solid hsl(var(--action-border));
+  border-radius: 999px;
+  color: hsl(var(--action-bg-hover));
+  font-size: 0.84rem;
+  font-weight: 800;
+  justify-self: start;
+  padding: 0.34rem 0.62rem;
+  white-space: nowrap;
+}
+
+.student-roster-person {
+  min-width: 0;
+}
+
+.student-roster-person strong {
+  color: hsl(var(--text-primary));
+  display: block;
+  font-size: 0.94rem;
+  line-height: 1.35;
+}
+
+.student-roster-person span {
+  color: hsl(var(--text-muted));
+  display: block;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  margin-top: 0.12rem;
+  overflow-wrap: anywhere;
+}
+
+.student-roster-pagination {
+  align-items: center;
+  background: hsl(var(--bg-surface));
+  border-top: 1px solid hsl(var(--border-color));
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+}
+
+.student-roster-page-summary {
+  color: hsl(var(--text-muted));
+  font-size: 0.86rem;
+}
+
+.student-roster-page-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.student-roster-page-controls button {
+  background: white;
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  color: hsl(var(--text-secondary));
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0 0.62rem;
+}
+
+.student-roster-page-controls button.active {
+  background: hsl(var(--action-soft));
+  border-color: hsl(var(--action-border));
+  color: hsl(var(--action-bg-hover));
+  box-shadow: inset 0 0 0 1px hsl(var(--action-border));
+}
+
+.student-roster-page-controls button:disabled {
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-muted));
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.student-roster-page-gap {
+  color: hsl(var(--text-muted));
+  font-size: 0.86rem;
+  padding: 0 0.1rem;
 }
 
 .notice {
@@ -2755,7 +3083,7 @@ option {
   min-height: 30px;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
-  border: 1px solid hsl(198 64% 82%);
+  border: 1px solid hsl(var(--border-strong));
   background: hsl(var(--bg-soft));
   color: hsl(var(--color-primary-strong)) !important;
   font-weight: 800;
@@ -2786,7 +3114,7 @@ option {
   background: hsl(211 48% 12%);
   border: 1px solid hsl(210 38% 22%);
   border-radius: 8px;
-  color: hsl(198 86% 92%);
+  color: hsl(var(--bg-soft));
   max-height: 180px;
   overflow: auto;
   padding: 0.85rem;
@@ -2800,6 +3128,92 @@ option {
   color: hsl(var(--text-muted));
   padding: 2rem;
   text-align: center;
+}
+
+.student-submit-page {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.student-submit-toolbar {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.student-submit-toolbar h1 {
+  font-size: 1.75rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.student-submit-toolbar p {
+  color: hsl(var(--text-secondary));
+  line-height: 1.55;
+  margin-top: 0.35rem;
+}
+
+.student-submit-toolbar strong {
+  color: hsl(var(--action-bg-hover));
+}
+
+.student-submit-context {
+  background: white;
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.student-submit-meta {
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.student-submit-meta div {
+  background: rgba(255, 255, 255, 0.72);
+  min-width: 0;
+  padding: 0.85rem 0.95rem;
+}
+
+.student-submit-meta div + div {
+  border-left: 1px solid hsl(var(--border-color));
+}
+
+.student-submit-meta span,
+.student-submit-brief span {
+  color: hsl(var(--text-muted));
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.student-submit-meta strong {
+  color: hsl(var(--text-primary));
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.35;
+  margin-top: 0.28rem;
+}
+
+.student-submit-brief {
+  background: hsl(var(--bg-base));
+  border: 1px solid hsl(var(--border-color));
+  border-radius: 8px;
+  padding: 0.9rem 0.95rem;
+}
+
+.student-submit-brief p {
+  color: hsl(var(--text-secondary));
+  line-height: 1.55;
+  margin-top: 0.32rem;
+  white-space: pre-wrap;
 }
 
 .submit-grid {
@@ -2847,7 +3261,7 @@ option {
   top: 88px;
   align-self: start;
   background: rgba(255, 255, 255, 0.58);
-  border: 1px solid hsl(203 34% 88%);
+  border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
   overflow: hidden;
 }
@@ -2868,7 +3282,7 @@ option {
 .submission-list-header span {
   align-items: center;
   background: hsl(var(--bg-soft));
-  border: 1px solid hsl(198 64% 82%);
+  border: 1px solid hsl(var(--border-strong));
   border-radius: 999px;
   color: hsl(var(--color-primary-strong));
   display: inline-flex;
@@ -2884,7 +3298,7 @@ option {
   max-height: calc(100vh - 260px);
   overflow: auto;
   padding: 0.45rem;
-  border-top: 1px solid hsl(203 34% 88%);
+  border-top: 1px solid hsl(var(--border-color));
 }
 
 .submission-list-state {
@@ -2912,12 +3326,12 @@ option {
 
 .submission-list-item:hover,
 .submission-list-item.selected {
-  background: white;
-  border-color: hsl(var(--border-strong));
+  background: hsl(var(--action-soft));
+  border-color: hsl(var(--action-border));
 }
 
 .submission-list-item.selected {
-  box-shadow: inset 3px 0 0 hsl(var(--color-primary));
+  box-shadow: inset 3px 0 0 hsl(var(--action-bg));
 }
 
 .submission-list-item > span:first-child {
@@ -2953,7 +3367,7 @@ option {
   background: hsl(var(--bg-surface));
   border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
-  box-shadow: 0 14px 34px rgba(14, 72, 111, 0.08);
+  box-shadow: 0 14px 34px rgba(33, 41, 54, 0.08);
   min-width: 0;
   overflow: hidden;
 }
@@ -2998,7 +3412,7 @@ option {
 .student-stat-tile {
   border: 1px solid hsl(var(--border-color));
   border-radius: 8px;
-  background: hsl(204 60% 98%);
+  background: hsl(var(--bg-base));
   padding: 0.9rem;
 }
 
@@ -3265,6 +3679,15 @@ option {
     display: block;
   }
 
+  .sidebar.collapsed .sidebar-account {
+    border-top: 1px solid hsl(var(--border-color));
+    padding-top: 1rem;
+  }
+
+  .sidebar.collapsed .sidebar-user-card {
+    display: block;
+  }
+
   .sidebar.collapsed .sidebar-link {
     justify-content: flex-start;
     gap: 0.75rem;
@@ -3275,6 +3698,12 @@ option {
     justify-content: flex-start;
     gap: 0.65rem;
     padding: 0.58rem 0.65rem;
+  }
+
+  .sidebar.collapsed .sidebar-logout-button {
+    justify-content: flex-start;
+    gap: 0.65rem;
+    padding: 0.62rem 0.75rem;
   }
 
   .content-area {
@@ -3296,6 +3725,7 @@ option {
   }
 
   .student-assignment-toolbar,
+  .student-submit-toolbar,
   .teacher-assignment-detail-header,
   .student-history-toolbar,
   .student-card-header,
@@ -3354,6 +3784,15 @@ option {
     justify-content: stretch;
   }
 
+  .student-roster-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .student-roster-page-controls {
+    justify-content: flex-start;
+  }
+
   .modal-overlay {
     padding: 0.75rem;
   }
@@ -3400,12 +3839,18 @@ option {
   .assignment-meta-grid,
   .assignment-testcase-summary,
   .student-assignment-stats,
+  .student-submit-meta,
   .student-assignment-filter-tabs,
   .student-result-stats,
   .detail-grid,
   .assignment-type-grid,
   .sidebar-nav {
     grid-template-columns: 1fr;
+  }
+
+  .student-submit-meta div + div {
+    border-left: 0;
+    border-top: 1px solid hsl(var(--border-color));
   }
 
   .panel-title-row {
