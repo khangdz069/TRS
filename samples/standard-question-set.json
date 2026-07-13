@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "mode": "QUESTION_SET",
+  "questions": [
+    {
+      "id": "array-show",
+      "title": "ArrayShow",
+      "prompt": "Define a function named ArrayShow to show elements of an integer array, size n. Output elements separated by one space.",
+      "points": 1,
+      "kind": "CODE",
+      "starterCode": "void ArrayShow(int a[], int n) {\n  // write your code here\n}",
+      "referenceAnswer": "void ArrayShow(int a[], int n) {\n  for (int i = 0; i < n; i++) cout << a[i] << (i + 1 == n ? \"\" : \" \");\n}",
+      "options": ["", "", "", ""],
+      "correctOption": 0,
+      "testcases": [
+        {
+          "input": "int n = 5;\nint Arr[] = {1,2,3,4,5};\nArrayShow(Arr,n);",
+          "expected": "1 2 3 4 5"
+        },
+        {
+          "input": "int n = 5;\nint Arr[] = {-1,2,-3,4,-5};\nArrayShow(Arr,n);",
+          "expected": "-1 2 -3 4 -5"
+        }
+      ]
+    },
+    {
+      "id": "sum-array",
+      "title": "SumArray",
+      "prompt": "Define a function named SumArray that returns the sum of n integers in array a.",
+      "points": 1,
+      "kind": "CODE",
+      "starterCode": "int SumArray(int a[], int n) {\n  // write your code here\n}",
+      "referenceAnswer": "int SumArray(int a[], int n) {\n  int s = 0;\n  for (int i = 0; i < n; i++) s += a[i];\n  return s;\n}",
+      "options": ["", "", "", ""],
+      "correctOption": 0,
+      "testcases": [
+        {
+          "input": "int a[] = {1,2,3};\ncout << SumArray(a,3);",
+          "expected": "6"
+        },
+        {
+          "input": "int a[] = {-2,5,7};\ncout << SumArray(a,3);",
+          "expected": "10"
+        }
+      ]
+    }
+  ]
+}

@@ -74,6 +74,8 @@ export default function LoginPage() {
 
       localStorage.setItem("trs_token", data.token);
       localStorage.setItem("trs_user", JSON.stringify(data.account));
+      localStorage.removeItem("trs_student");
+      localStorage.removeItem("trs_teacher");
       if (data.student) localStorage.setItem("trs_student", JSON.stringify(data.student));
       if (data.teacher) localStorage.setItem("trs_teacher", JSON.stringify(data.teacher));
 

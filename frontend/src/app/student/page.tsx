@@ -8,6 +8,16 @@ interface Assignment {
   id: string;
   name: string;
   description: string;
+  assignment_type?: AssignmentType;
+  supported_languages?: string[];
+  testcase_samples?: string;
+  testcase_generation_strategy?: string;
+  testcase_seed_count?: number;
+  generated_testcase_count?: number;
+  problem_statement?: string;
+  starter_code?: string;
+  reference_solution?: string;
+  type_config?: string;
   start_date: string;
   end_date: string;
   author_name: string;
@@ -70,6 +80,124 @@ interface EncodedSubmissionFile {
 }
 
 type StudentTab = "assignments" | "submit" | "history";
+type AssignmentType = "STANDARD" | "FILL_BLANK" | "DEBUGGING" | "PROJECT" | "QUIZ_CODE";
+type SubmitMode = "editor" | "file";
+type QuestionKind = "CODE" | "TEXT" | "SINGLE_CHOICE";
+type TestcasePair = { input: string; expected: string };
+type AssignmentQuestion = {
+  id: string;
+  title: string;
+  prompt: string;
+  points: number;
+  kind: QuestionKind;
+  starterCode: string;
+  referenceAnswer: string;
+  options: string[];
+  correctOption: number;
+  testcases: TestcasePair[];
+};
+type StructuredAssignmentConfig = {
+  version: 1;
+  mode: "QUESTION_SET";
+  questions: AssignmentQuestion[];
+};
+type QuestionAnswers = Record<string, string>;
+type TrialResult = {
+  status: string;
+  scores?: Record<string, boolean> | boolean[] | string | null;
+  failed_outputs?: Record<string, {
+    expected?: string | null;
+    actual?: string | null;
+    error?: string | null;
+  }> | null;
+  compile_error?: string | null;
+  runtime_error?: string | null;
+  error?: string;
+};
+
+const STUDENT_ASSIGNMENT_FLOW: Record<AssignmentType, {
+  label: string;
+  goal: string;
+  workLabel: string;
+  workHint: string;
+  editorLabel: string;
+  editorPlaceholder: string;
+  fileHint: string;
+  submitLabel: string;
+  primaryMaterialLabel: string;
+  starterLabel?: string;
+  configLabel: string;
+  testcaseLabel: string;
+}> = {
+  STANDARD: {
+    label: "Bài lập trình",
+    goal: "Đọc đề, viết lời giải bằng ngôn ngữ cho phép và nộp source để chấm testcase.",
+    workLabel: "Bạn cần làm gì?",
+    workHint: "Viết chương trình giải đúng yêu cầu đề bài. Nên tự chạy với ví dụ trước khi nộp.",
+    editorLabel: "Mã nguồn lời giải",
+    editorPlaceholder: "// Viết lời giải của bạn tại đây",
+    fileHint: "Nộp file source hoặc zip chứa các file cần chấm.",
+    submitLabel: "Nộp lời giải",
+    primaryMaterialLabel: "Đề bài",
+    configLabel: "Cấu hình chấm",
+    testcaseLabel: "Testcase mẫu",
+  },
+  FILL_BLANK: {
+    label: "Bài đục lỗ",
+    goal: "Hoàn thiện các phần bị khuyết trong template, giữ nguyên phần code có sẵn.",
+    workLabel: "Bạn cần điền gì?",
+    workHint: "Chỉ sửa/điền các vùng được yêu cầu. Không đổi tên hàm, class hoặc giao diện đã cho nếu đề không cho phép.",
+    editorLabel: "Code sau khi điền lỗ trống",
+    editorPlaceholder: "// Dán template đã hoàn thiện tại đây",
+    fileHint: "Nộp file code đã điền đầy đủ các vùng còn thiếu.",
+    submitLabel: "Nộp bản đã điền",
+    primaryMaterialLabel: "Yêu cầu bài đục lỗ",
+    starterLabel: "Template cần hoàn thiện",
+    configLabel: "Quy tắc đục lỗ",
+    testcaseLabel: "Testcase kiểm chứng",
+  },
+  DEBUGGING: {
+    label: "Bài sửa lỗi",
+    goal: "Sửa code lỗi được giao để chương trình chạy đúng với hành vi mong muốn.",
+    workLabel: "Bạn cần sửa gì?",
+    workHint: "Tìm bug trong code được giao, sửa tối thiểu cần thiết và giữ nguyên public API nếu đề yêu cầu.",
+    editorLabel: "Code sau khi sửa lỗi",
+    editorPlaceholder: "// Dán code đã sửa tại đây",
+    fileHint: "Nộp file code đã sửa hoặc zip nếu bài có nhiều file.",
+    submitLabel: "Nộp bản đã sửa",
+    primaryMaterialLabel: "Hành vi đúng cần đạt",
+    starterLabel: "Code lỗi được giao",
+    configLabel: "Mô tả lỗi cần xử lý",
+    testcaseLabel: "Testcase bắt lỗi",
+  },
+  PROJECT: {
+    label: "Mini project",
+    goal: "Hoàn thiện project theo brief, rubric và cấu trúc nộp được yêu cầu.",
+    workLabel: "Bạn cần bàn giao gì?",
+    workHint: "Làm đầy đủ tính năng bắt buộc, giữ cấu trúc thư mục rõ ràng và nộp zip/source theo yêu cầu.",
+    editorLabel: "Ghi chú nộp bài / file chính",
+    editorPlaceholder: "Ghi chú cách chạy project, file chính, hoặc dán nội dung README nếu cần.",
+    fileHint: "Ưu tiên nộp zip chứa toàn bộ project, README và script chạy.",
+    submitLabel: "Nộp project",
+    primaryMaterialLabel: "Brief dự án",
+    starterLabel: "Starter project / cấu trúc gợi ý",
+    configLabel: "Rubric chấm điểm",
+    testcaseLabel: "Smoke / integration tests",
+  },
+  QUIZ_CODE: {
+    label: "Quiz code",
+    goal: "Đọc câu hỏi/snippet code và nộp đáp án hoặc giải thích ngắn.",
+    workLabel: "Bạn cần trả lời gì?",
+    workHint: "Trả lời đúng trọng tâm câu hỏi. Nếu cần giải thích, ghi ngắn gọn cách suy luận.",
+    editorLabel: "Đáp án của bạn",
+    editorPlaceholder: "Nhập đáp án và giải thích ngắn tại đây.",
+    fileHint: "Quiz thường nộp bằng editor; chỉ đính kèm file nếu đề yêu cầu.",
+    submitLabel: "Nộp đáp án",
+    primaryMaterialLabel: "Câu hỏi / snippet code",
+    configLabel: "Cấu hình quiz",
+    testcaseLabel: "Kiểm chứng tùy chọn",
+  },
+};
 
 const STUDENT_ACTIVE_TAB_KEY = "trs_student_active_tab";
 const STUDENT_SELECTED_ASSIGNMENT_KEY = "trs_student_selected_assignment_id";
@@ -79,6 +207,103 @@ const isStudentTab = (value: string | null): value is StudentTab =>
   value === "assignments" || value === "submit" || value === "history";
 
 const PUBLIC_TESTCASE_COUNT = 10;
+const getStudentAssignmentFlow = (type?: string) =>
+  STUDENT_ASSIGNMENT_FLOW[(type as AssignmentType) || "STANDARD"] || STUDENT_ASSIGNMENT_FLOW.STANDARD;
+
+const languageLabel = (values?: string[]) => {
+  if (!values || values.length === 0) return "Theo yêu cầu bài";
+  const labels: Record<string, string> = {
+    c: "C",
+    cpp: "C++",
+    java: "Java",
+    python: "Python",
+    javascript: "JavaScript",
+    typescript: "TypeScript",
+    go: "Go",
+    rust: "Rust",
+  };
+  return values.map((value) => labels[value] || value).join(", ");
+};
+
+const contentPreview = (value?: string, fallback = "Chưa có nội dung.") =>
+  value && value.trim() ? value : fallback;
+
+const parseTestcasePairs = (value?: string): TestcasePair[] => {
+  if (!value || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => ({
+          input: String(item?.input ?? "").trim(),
+          expected: String(item?.expected ?? item?.output ?? "").trim(),
+        }))
+        .filter((item) => item.input || item.expected);
+    }
+  } catch {
+    // Support old plain text testcase samples.
+  }
+  return value.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/\s*(?:->|=>|\|)\s*/);
+      return { input: parts[0] || "", expected: parts.slice(1).join(" ") };
+    });
+};
+
+const normalizeQuestion = (item: Partial<AssignmentQuestion>, index: number): AssignmentQuestion => ({
+  id: String(item.id || `q-${index + 1}`),
+  title: String(item.title || `Câu ${index + 1}`),
+  prompt: String(item.prompt || ""),
+  points: Number(item.points) || 1,
+  kind: (item.kind === "TEXT" || item.kind === "SINGLE_CHOICE" || item.kind === "CODE") ? item.kind : "CODE",
+  starterCode: String(item.starterCode || ""),
+  referenceAnswer: String(item.referenceAnswer || ""),
+  options: Array.from({ length: 4 }, (_, optionIndex) => String(item.options?.[optionIndex] || "")),
+  correctOption: Math.min(3, Math.max(0, Number(item.correctOption) || 0)),
+  testcases: Array.isArray(item.testcases)
+    ? item.testcases.map((pair) => ({
+        input: String(pair?.input || ""),
+        expected: String(pair?.expected || ""),
+      }))
+    : [],
+});
+
+const parseQuestionConfig = (assignment?: Assignment | null): AssignmentQuestion[] => {
+  if (!assignment?.type_config) return [];
+  try {
+    const parsed = JSON.parse(assignment.type_config) as Partial<StructuredAssignmentConfig> | Partial<AssignmentQuestion>[];
+    const questions = Array.isArray(parsed) ? parsed : parsed.questions;
+    if (Array.isArray(questions)) {
+      return questions.map(normalizeQuestion).filter((question) => question.prompt.trim() || question.title.trim());
+    }
+  } catch {
+    return [];
+  }
+  return [];
+};
+
+const buildQuestionAnswerFile = (questions: AssignmentQuestion[], answers: QuestionAnswers) =>
+  questions.map((question, index) => {
+    const answer = answers[question.id] || "";
+    return [
+      `# ${index + 1}. ${question.title}`,
+      question.kind === "SINGLE_CHOICE" ? `Selected: ${answer || "Chưa chọn"}` : answer,
+    ].join("\n");
+  }).join("\n\n");
+
+const buildStudentStarter = (assignment?: Assignment | null) => {
+  if (!assignment?.starter_code) return "";
+  if (assignment.assignment_type === "FILL_BLANK") {
+    return assignment.starter_code.replace(
+      /\/\*\s*HOLE:start\s*\*\/[\s\S]*?\/\*\s*HOLE:end\s*\*\//g,
+      "/* TODO: Hoàn thiện phần code còn thiếu tại đây. */"
+    );
+  }
+  return assignment.starter_code;
+};
+
 const TESTCASE_IDS = [
   ...Array.from({ length: 10 }, (_, index) => 1001 + index),
   ...Array.from({ length: 6 }, (_, index) => 1011 + index),
@@ -207,6 +432,15 @@ export default function StudentDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [submitMode, setSubmitMode] = useState<SubmitMode>("editor");
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [questionAnswers, setQuestionAnswers] = useState<QuestionAnswers>({});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
+  const [questionEditorSize, setQuestionEditorSize] = useState<"normal" | "large">("normal");
+  const [isQuestionAnswerExpanded, setIsQuestionAnswerExpanded] = useState(false);
+  const [questionTrialResults, setQuestionTrialResults] = useState<Record<string, TrialResult>>({});
+  const [runningTrialQuestionId, setRunningTrialQuestionId] = useState<string | null>(null);
+  const [isReviewingSubmittedWork, setIsReviewingSubmittedWork] = useState(false);
 
   // Feedback Form states
   const [formRating, setFormRating] = useState<number>(5);
@@ -232,7 +466,7 @@ export default function StudentDashboard() {
     }
     const parsedUser = JSON.parse(user);
     if (parsedUser.role !== "STUDENT") {
-      router.push("/teacher");
+      router.push("/login");
       return;
     }
     const savedTab = localStorage.getItem(STUDENT_ACTIVE_TAB_KEY);
@@ -255,6 +489,27 @@ export default function StudentDashboard() {
       localStorage.setItem(STUDENT_SELECTED_ASSIGNMENT_KEY, selectedAsm.id);
     }
   }, [selectedAsm, isMounted]);
+
+  useEffect(() => {
+    if (!selectedAsm) return;
+    const flow = getStudentAssignmentFlow(selectedAsm.assignment_type);
+    const questions = parseQuestionConfig(selectedAsm);
+    setEditorFile(selectedAsm.assignment_type === "QUIZ_CODE" ? "answer.txt" : selectedAsm.assignment_type === "PROJECT" ? "README.md" : "solution.cpp");
+    setEditorContent(questions[0]?.starterCode || buildStudentStarter(selectedAsm) || `${flow.editorPlaceholder}\n`);
+    setSubmitMode(selectedAsm.assignment_type === "PROJECT" ? "file" : "editor");
+    setActiveQuestionIndex(0);
+    setQuestionAnswers(Object.fromEntries(
+      questions
+        .filter((question) => question.kind !== "SINGLE_CHOICE" && question.starterCode)
+        .map((question) => [question.id, question.starterCode])
+    ));
+    setFlaggedQuestions({});
+    setQuestionTrialResults({});
+    setRunningTrialQuestionId(null);
+    setQuestionEditorSize("normal");
+    setIsQuestionAnswerExpanded(false);
+    clearSelectedFiles();
+  }, [selectedAsm?.id]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -435,6 +690,40 @@ export default function StudentDashboard() {
     try {
       let response;
       if (mode === "editor") {
+        if (selectedQuestions.length > 0) {
+          const firstUnanswered = selectedQuestions.findIndex((question) => !isQuestionAnswered(question));
+          if (firstUnanswered >= 0) {
+            setActiveQuestionIndex(firstUnanswered);
+            setSubmitError(`Bạn còn câu ${firstUnanswered + 1} chưa trả lời.`);
+            setIsSubmitting(false);
+            return;
+          }
+          response = await fetch("/api/submissions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              assignment_id: selectedAsm.id,
+              files: [
+                {
+                  filename: "answers.json",
+                  content: JSON.stringify({
+                    assignment_id: selectedAsm.id,
+                    answers: selectedQuestions.map((question, index) => ({
+                      question: index + 1,
+                      question_id: question.id,
+                      title: question.title,
+                      kind: question.kind,
+                      answer: questionAnswers[question.id] || "",
+                    })),
+                  }, null, 2),
+                }
+              ]
+            })
+          });
+        } else {
         response = await fetch("/api/submissions", {
           method: "POST",
           headers: {
@@ -448,6 +737,7 @@ export default function StudentDashboard() {
             ]
           })
         });
+        }
       } else {
         if (encodedSolutionFiles.length === 0) {
           setSubmitError("Vui lòng kéo thả hoặc chọn tệp tin cần nộp.");
@@ -478,13 +768,15 @@ export default function StudentDashboard() {
 
       if (response.ok) {
         setSubmitSuccess(true);
+        setIsReviewingSubmittedWork(false);
         setSolutionFiles([]);
         setEncodedSolutionFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
         
-        // Refresh submissions
-        fetchSubmissions(selectedAsm.id, { preferNewest: true });
-        setActiveTab("history");
+        await fetchSubmissions(selectedAsm.id, { preferNewest: true });
+        if (selectedQuestions.length === 0) {
+          setActiveTab("history");
+        }
       } else {
         setSubmitError(resData.error || `Nộp bài thất bại. Mã lỗi HTTP ${response.status}.`);
       }
@@ -493,6 +785,63 @@ export default function StudentDashboard() {
       setSubmitError(`Không gửi được request nộp bài: ${message}. Hãy tải lại trang rồi thử lại.`);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRunQuestionTrial = async (question: AssignmentQuestion, questionIndex: number) => {
+    const token = localStorage.getItem("trs_token");
+    if (!token || !selectedAsm || runningTrialQuestionId) return;
+
+    const answer = questionAnswers[question.id] ?? question.starterCode;
+    if (!answer.trim() || (question.starterCode && answer.trim() === question.starterCode.trim())) {
+      setQuestionTrialResults((current) => ({
+        ...current,
+        [question.id]: { status: "FAILED", error: "Bạn cần nhập hoặc sửa lời giải trước khi chạy thử." },
+      }));
+      return;
+    }
+    if (question.testcases.length === 0) {
+      setQuestionTrialResults((current) => ({
+        ...current,
+        [question.id]: { status: "FAILED", error: "Câu này chưa có testcase mẫu để chạy thử." },
+      }));
+      return;
+    }
+
+    setRunningTrialQuestionId(question.id);
+    setQuestionTrialResults((current) => {
+      const next = { ...current };
+      delete next[question.id];
+      return next;
+    });
+
+    try {
+      const response = await fetch("/api/submissions/trial", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          assignment_id: selectedAsm.id,
+          question: questionIndex + 1,
+          answer,
+          testcases: question.testcases,
+        }),
+      });
+      const data = await response.json().catch(() => ({ status: "FAILED", error: "Không đọc được phản hồi từ grader." }));
+      setQuestionTrialResults((current) => ({
+        ...current,
+        [question.id]: response.ok ? data : { status: "FAILED", error: data.error || "Không chạy thử được testcase." },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Không rõ nguyên nhân";
+      setQuestionTrialResults((current) => ({
+        ...current,
+        [question.id]: { status: "FAILED", error: `Không kết nối được grader: ${message}` },
+      }));
+    } finally {
+      setRunningTrialQuestionId(null);
     }
   };
 
@@ -588,6 +937,7 @@ export default function StudentDashboard() {
       assignment.name,
       assignment.description,
       assignment.author_name,
+      getStudentAssignmentFlow(assignment.assignment_type).label,
       assignment.id,
     ].join(" ").toLowerCase();
 
@@ -595,6 +945,48 @@ export default function StudentDashboard() {
   });
   const openAssignmentCount = assignments.filter((assignment) => getAssignmentStatus(assignment) === "OPEN").length;
   const closedAssignmentCount = assignments.length - openAssignmentCount;
+  const selectedFlow = getStudentAssignmentFlow(selectedAsm?.assignment_type);
+  const selectedQuestions = parseQuestionConfig(selectedAsm);
+  const activeQuestion = selectedQuestions[activeQuestionIndex] || selectedQuestions[0] || null;
+  const isQuestionAnswered = (question: AssignmentQuestion) => {
+    const answer = (questionAnswers[question.id] || "").trim();
+    if (!answer) return false;
+    if (question.kind !== "SINGLE_CHOICE" && question.starterCode && answer === question.starterCode.trim()) {
+      return false;
+    }
+    return true;
+  };
+  const answeredQuestionCount = selectedQuestions.filter(isQuestionAnswered).length;
+  const totalQuestionCount = selectedQuestions.length;
+  const questionProgressPercent = totalQuestionCount > 0 ? Math.round((answeredQuestionCount / totalQuestionCount) * 100) : 0;
+  const unansweredQuestions = selectedQuestions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => !isQuestionAnswered(question));
+  const goToRelativeQuestion = (offset: number) => {
+    if (totalQuestionCount === 0) return;
+    setActiveQuestionIndex((current) => Math.min(totalQuestionCount - 1, Math.max(0, current + offset)));
+  };
+  const handleReviewSubmittedWork = () => {
+    setIsReviewingSubmittedWork(true);
+    setSubmitSuccess(false);
+  };
+  const handleRetakeQuestionAssignment = () => {
+    setIsReviewingSubmittedWork(false);
+    setSubmitSuccess(false);
+    setSubmitError("");
+    setActiveQuestionIndex(0);
+    setQuestionAnswers({});
+    setFlaggedQuestions({});
+    setQuestionTrialResults({});
+    setRunningTrialQuestionId(null);
+    setQuestionEditorSize("normal");
+    setIsQuestionAnswerExpanded(false);
+  };
+  const selectedAcceptedFiles = selectedAsm?.assignment_type === "PROJECT"
+    ? ".zip,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.md,.txt"
+    : selectedAsm?.assignment_type === "QUIZ_CODE"
+      ? ".txt,.md,.cpp,.c,.java,.py,.js,.ts"
+      : ".cpp,.c,.h,.hpp,.java,.py,.js,.ts,.zip";
 
   const getStatusMessage = (recStatus: string) => {
     switch (recStatus) {
@@ -618,6 +1010,45 @@ export default function StudentDashboard() {
   const scoreEntries = normalizeScores(selectedSubmission?.scores ?? null);
   const passedCount = scoreEntries.filter((score) => score.passed).length;
   const totalCount = scoreEntries.length;
+  const totalQuestionPoints = selectedQuestions.reduce((sum, question) => sum + (Number(question.points) || 0), 0);
+  const maxPointDisplay = totalQuestionPoints > 0 ? totalQuestionPoints : 10;
+  const earnedPointValue = selectedSubmission
+    ? totalCount > 0
+      ? (passedCount / totalCount) * maxPointDisplay
+      : selectedSubmission.status === "SUCCESS"
+        ? maxPointDisplay
+        : 0
+    : 0;
+  const earnedPointDisplay = Number.isInteger(earnedPointValue)
+    ? String(earnedPointValue)
+    : earnedPointValue.toFixed(2);
+  const maxPointText = Number.isInteger(maxPointDisplay) ? String(maxPointDisplay) : maxPointDisplay.toFixed(2);
+  const submittedAtText = selectedSubmission && isMounted
+    ? new Date(selectedSubmission.created_at).toLocaleString("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "";
+  const submissionStatusText = selectedSubmission
+    ? selectedSubmission.status === "SUCCESS"
+      ? "Đã xong"
+      : selectedSubmission.status === "FAILED"
+        ? "Có lỗi"
+        : selectedSubmission.status === "PENDING" || selectedSubmission.status === "GRADING"
+          ? "Đang chấm"
+          : selectedSubmission.status
+    : "Chưa nộp";
+  const submissionStatusClass = selectedSubmission?.status === "SUCCESS"
+    ? "success"
+    : selectedSubmission?.status === "FAILED"
+      ? "danger"
+      : selectedSubmission
+        ? "warning"
+        : "neutral";
+  const showQuestionCompletionView = selectedQuestions.length > 0 && submitSuccess && !!selectedSubmission && !isReviewingSubmittedWork;
   const publicRows = scoreEntries
     .slice(0, PUBLIC_TESTCASE_COUNT)
     .map((score) => buildTestcaseRow(score.id, score.passed, selectedSubmission?.failed_outputs));
@@ -743,6 +1174,73 @@ export default function StudentDashboard() {
       </table>
     </div>
   );
+
+  const renderTrialResult = (question: AssignmentQuestion) => {
+    const result = questionTrialResults[question.id];
+    if (!result) return null;
+    const scoreEntries = normalizeScores(result.scores ?? null);
+    const failedOutputs = result.failed_outputs || null;
+    const passedCount = scoreEntries.filter((score) => score.passed).length;
+    const totalCount = scoreEntries.length;
+
+    return (
+      <div className="student-trial-result">
+        <div className="compact-section-heading">
+          <h4>Kết quả chạy thử</h4>
+          {totalCount > 0 && (
+            <span className={`mock-badge ${passedCount === totalCount ? "success" : "danger"}`}>
+              {passedCount}/{totalCount}
+            </span>
+          )}
+        </div>
+        {result.error && <div className="student-question-error">{result.error}</div>}
+        {result.compile_error && (
+          <div className="student-question-error">
+            <strong>Compile Error</strong>
+            <pre>{result.compile_error}</pre>
+          </div>
+        )}
+        {result.runtime_error && (
+          <div className="student-question-error">
+            <strong>Runtime Error</strong>
+            <pre>{result.runtime_error}</pre>
+          </div>
+        )}
+        {scoreEntries.length > 0 && (
+          <div className="student-testcase-table-wrap">
+            <table className="mock-table student-trial-table">
+              <thead>
+                <tr>
+                  <th>Test</th>
+                  <th>Expected</th>
+                  <th>Got</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreEntries.map((score, index) => {
+                  const testcase = question.testcases[index] || { input: "", expected: "" };
+                  const failure = failedOutputs?.[String(score.id)];
+                  return (
+                    <tr key={`${question.id}-trial-${score.id}`}>
+                      <td><pre>{testcase.input || "Không có input"}</pre></td>
+                      <td><pre>{failure?.expected || testcase.expected || "Không có expected"}</pre></td>
+                      <td><pre>{failure?.actual || failure?.error || (score.passed ? testcase.expected || "Khớp" : "N/A")}</pre></td>
+                      <td>
+                        <span className={`mock-badge ${score.passed ? "success" : "danger"}`}>
+                          {score.passed ? "Đúng" : "Sai"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -899,7 +1397,11 @@ export default function StudentDashboard() {
                             key={asm.id}
                             type="button"
                             className={`student-assignment-row ${isSelected ? "selected" : ""}`}
-                            onClick={() => setSelectedAsm(asm)}
+                            onClick={() => {
+                              setSelectedAsm(asm);
+                              setSubmitSuccess(false);
+                              setIsReviewingSubmittedWork(false);
+                            }}
                           >
                             <span className={`student-assignment-status-dot ${status.toLowerCase()}`} aria-hidden="true"></span>
                             <span className="student-assignment-row-main">
@@ -919,12 +1421,14 @@ export default function StudentDashboard() {
                       (() => {
                         const selectedStatus = getAssignmentStatus(selectedAsm);
                         const selectedDueInfo = getAssignmentDueInfo(selectedAsm);
+                        const selectedFlow = getStudentAssignmentFlow(selectedAsm.assignment_type);
                         return (
                       <div className="student-assignment-detail-inner">
                         <div className="student-assignment-detail-kicker">
                           <span className={`student-assignment-row-state ${selectedStatus.toLowerCase()}`}>
                             {selectedStatus === "OPEN" ? "Đang nhận bài" : "Đã đóng"}
                           </span>
+                          <code>{selectedFlow.label}</code>
                         </div>
 
                         <div className="student-assignment-detail-header">
@@ -932,6 +1436,12 @@ export default function StudentDashboard() {
                             <h2>{selectedAsm.name}</h2>
                             {selectedAsm.description && <p>{selectedAsm.description}</p>}
                           </div>
+                        </div>
+
+                        <div className="student-workflow-card">
+                          <span>Dạng bài này yêu cầu</span>
+                          <strong>{selectedFlow.workLabel}</strong>
+                          <p>{selectedFlow.workHint}</p>
                         </div>
 
                         <div className="student-assignment-meta-grid">
@@ -942,6 +1452,10 @@ export default function StudentDashboard() {
                           <div>
                             <span>Hạn nộp</span>
                             <strong>{selectedDueInfo.dateLabel}</strong>
+                          </div>
+                          <div>
+                            <span>Ngôn ngữ</span>
+                            <strong>{languageLabel(selectedAsm.supported_languages)}</strong>
                           </div>
                         </div>
 
@@ -970,17 +1484,429 @@ export default function StudentDashboard() {
 
           {activeTab === "submit" && selectedAsm && (
             <div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Nộp bài giải mới</h1>
+              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>{selectedFlow.submitLabel}</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Nộp mã nguồn cho bài tập: <strong style={{ color: "hsl(var(--color-primary))" }}>{selectedAsm.name}</strong>
+                {selectedFlow.goal} Bài tập: <strong style={{ color: "hsl(var(--color-primary))" }}>{selectedAsm.name}</strong>
               </p>
 
-              <div className="submit-grid">
-                {/* Method 1: Paste Code Editor */}
-                <div className="tech-panel" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
-                  <h3 className="tech-panel-title">Phương án 1: Trình soạn thảo mã</h3>
+              {showQuestionCompletionView ? (
+                <section className="student-completion-page">
+                  <div className="student-completion-title">
+                    <span>{selectedAsm.name}</span>
+                    <h2>Tổng quan lần làm bài trước của bạn</h2>
+                  </div>
+
+                  <div className="student-attempt-table large" role="table" aria-label="Tổng quan lần làm bài">
+                    <div className="student-attempt-row header" role="row">
+                      <span role="columnheader">Trạng thái</span>
+                      <span role="columnheader">Điểm đạt được</span>
+                      <span role="columnheader">Testcase</span>
+                      <span role="columnheader">Xem lại</span>
+                    </div>
+                    <div className="student-attempt-row" role="row">
+                      <div role="cell">
+                        <strong>{submissionStatusText}</strong>
+                        <p>{selectedSubmission ? `Đã nộp ${submittedAtText}` : "Chưa có lần nộp nào."}</p>
+                      </div>
+                      <div role="cell">
+                        <strong>{earnedPointDisplay}/{maxPointText}</strong>
+                        <p>Điểm tạm tính theo testcase đã vượt qua.</p>
+                      </div>
+                      <div role="cell">
+                        <strong>{totalCount > 0 ? `${passedCount}/${totalCount}` : "--"}</strong>
+                        <p>{totalCount > 0 ? `${Math.round((passedCount / totalCount) * 100)}% testcase đúng` : "Chưa có dữ liệu chấm."}</p>
+                      </div>
+                      <div role="cell">
+                        <span className={`mock-badge ${submissionStatusClass}`}>{selectedSubmission?.status || "Chưa nộp"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="student-completion-actions">
+                    <button type="button" className="btn btn-primary" onClick={handleReviewSubmittedWork}>
+                      Xem lại bài đã nộp
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={handleRetakeQuestionAssignment}>
+                      Làm lại lần nữa
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => setActiveTab("assignments")}>
+                      Quay lại danh sách bài
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => setActiveTab("history")}>
+                      Xem lịch sử đầy đủ
+                    </button>
+                  </div>
+
+                  {publicRows.length > 0 && (
+                    <details className="student-attempt-details" open>
+                      <summary>
+                        <span>Chi tiết testcase đã chấm</span>
+                        <strong>{passedCount}/{totalCount}</strong>
+                      </summary>
+                      {publicTableHasHiddenFailures && <span className="mock-badge warning">Còn lỗi ẩn</span>}
+                      {renderTestcaseTable(publicRows, { warningBackground: publicTableHasHiddenFailures, compact: "result" })}
+                    </details>
+                  )}
+
+                  {recommendation && (
+                    <details className="student-attempt-details">
+                      <summary>
+                        <span>Gợi ý testcase</span>
+                        <strong>{recommendation.status}</strong>
+                      </summary>
+                      <p>{getStatusMessage(recommendation.status)}</p>
+                      {canShowRecommendationRows && recommendationRows.length > 0 && (
+                        <>
+                          <div className="compact-section-heading subtle">
+                            <h4>{recommendation.status === "PREVIOUS_TESTCASE_NOT_COMPLETED" ? "Cần hoàn thành trước" : "Nên thử tiếp"}</h4>
+                            <span className="panel-count-pill">{recommendationRows.length} TC</span>
+                          </div>
+                          {renderTestcaseTable(recommendationRows, { compact: "recommendation" })}
+                        </>
+                      )}
+                    </details>
+                  )}
+                </section>
+              ) : selectedQuestions.length > 0 ? (
+              <div className="student-question-workspace">
+                {isReviewingSubmittedWork && selectedSubmission && (
+                  <section className="student-completion-page review-anchor">
+                    <div className="student-completion-title">
+                      <span>{selectedAsm.name}</span>
+                      <h2>Tổng quan lần làm bài trước của bạn</h2>
+                    </div>
+
+                    <div className="student-attempt-table large" role="table" aria-label="Tổng quan lần làm bài">
+                      <div className="student-attempt-row header" role="row">
+                        <span role="columnheader">Trạng thái</span>
+                        <span role="columnheader">Điểm đạt được</span>
+                        <span role="columnheader">Testcase</span>
+                        <span role="columnheader">Xem lại</span>
+                      </div>
+                      <div className="student-attempt-row" role="row">
+                        <div role="cell">
+                          <strong>{submissionStatusText}</strong>
+                          <p>{`Đã nộp ${submittedAtText || "đang cập nhật"}`}</p>
+                        </div>
+                        <div role="cell">
+                          <strong>{earnedPointDisplay}/{maxPointText}</strong>
+                          <p>Điểm tạm tính theo testcase đã vượt qua.</p>
+                        </div>
+                        <div role="cell">
+                          <strong>{totalCount > 0 ? `${passedCount}/${totalCount}` : "--"}</strong>
+                          <p>{totalCount > 0 ? `${Math.round((passedCount / totalCount) * 100)}% testcase đúng` : "Chưa có dữ liệu chấm."}</p>
+                        </div>
+                        <div role="cell">
+                          <span className={`mock-badge ${submissionStatusClass}`}>{selectedSubmission.status}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="student-completion-actions">
+                      <button type="button" className="btn btn-primary" onClick={() => {
+                        setSubmitSuccess(true);
+                        setIsReviewingSubmittedWork(false);
+                      }}>
+                        Quay lại bảng kết quả
+                      </button>
+                      <button type="button" className="btn btn-secondary" onClick={handleRetakeQuestionAssignment}>
+                        Làm lại lần nữa
+                      </button>
+                      <button type="button" className="btn btn-secondary" onClick={() => setActiveTab("history")}>
+                        Xem lịch sử đầy đủ
+                      </button>
+                    </div>
+                  </section>
+                )}
+                {activeQuestion && (
+                  <div className="student-question-number-panel">
+                    <div className="student-question-number-header">
+                      <div>
+                        <span>{selectedFlow.label}</span>
+                        <strong>{answeredQuestionCount}/{totalQuestionCount}</strong>
+                      </div>
+                      <button
+                        type="button"
+                        className={`flag-current-button ${flaggedQuestions[activeQuestion.id] ? "active" : ""}`}
+                        onClick={() => setFlaggedQuestions((current) => ({
+                          ...current,
+                          [activeQuestion.id]: !current[activeQuestion.id],
+                        }))}
+                      >
+                        {flaggedQuestions[activeQuestion.id] ? "Bỏ cờ" : "Cắm cờ"}
+                      </button>
+                    </div>
+                    <div className="student-question-progress">
+                      <div>
+                        <span style={{ width: `${questionProgressPercent}%` }}></span>
+                      </div>
+                      <small>Xanh: đã làm · Vàng: đã cắm cờ</small>
+                    </div>
+                    <div className="student-question-number-grid" aria-label="Chọn câu hỏi">
+                      {selectedQuestions.map((question, index) => {
+                        const answered = isQuestionAnswered(question);
+                        const flagged = Boolean(flaggedQuestions[question.id]);
+                        return (
+                          <button
+                            key={question.id}
+                            type="button"
+                            className={`${index === activeQuestionIndex ? "active" : ""} ${answered ? "answered" : ""} ${flagged ? "flagged" : ""}`}
+                            onClick={() => setActiveQuestionIndex(index)}
+                            title={`Câu ${index + 1}${answered ? " - đã làm" : " - chưa làm"}${flagged ? " - đã cắm cờ" : ""}`}
+                          >
+                            {index + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <section className="student-question-command-panel">
+                  <div className="student-question-submit-card">
+                    <div>
+                      <span>{isReviewingSubmittedWork ? "Xem lại bài đã nộp" : "Nộp bài"}</span>
+                      <strong>{isReviewingSubmittedWork ? submissionStatusText : `${answeredQuestionCount}/${totalQuestionCount} câu đã làm`}</strong>
+                      <p>
+                        {isReviewingSubmittedWork
+                          ? `Lần nộp gần nhất: ${submittedAtText || "đang cập nhật"}`
+                          : unansweredQuestions.length > 0
+                          ? `Còn thiếu: ${unansweredQuestions.map(({ index }) => `Câu ${index + 1}`).join(", ")}`
+                          : "Đã đủ câu trả lời, có thể nộp toàn bộ bài."}
+                      </p>
+                    </div>
+                    {isReviewingSubmittedWork ? (
+                      <div className="student-review-actions">
+                        <button type="button" className="btn btn-primary" onClick={() => {
+                          setSubmitSuccess(true);
+                          setIsReviewingSubmittedWork(false);
+                        }}>
+                          Quay lại bảng kết quả
+                        </button>
+                        <button type="button" className="btn btn-secondary" onClick={handleRetakeQuestionAssignment}>
+                          Làm lại lần nữa
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleSubmitSolution("editor")}
+                        disabled={isSubmitting || answeredQuestionCount < totalQuestionCount}
+                      >
+                        {isSubmitting ? "Đang gửi..." : selectedFlow.submitLabel}
+                      </button>
+                    )}
+                  </div>
+
+                </section>
+
+                <section className="student-question-main">
+                  {activeQuestion && (
+                    <>
+                      <div className="student-question-paper">
+                        <div className="student-question-title-row">
+                          <div>
+                            <span>Câu {activeQuestionIndex + 1}</span>
+                            <h2>{activeQuestion.title}</h2>
+                          </div>
+                          <strong>{activeQuestion.points} điểm</strong>
+                        </div>
+                        <p>{activeQuestion.prompt}</p>
+                        {activeQuestion.starterCode && activeQuestion.kind !== "SINGLE_CHOICE" && (
+                          <pre>{activeQuestion.starterCode}</pre>
+                        )}
+                        {activeQuestion.testcases.length > 0 && (
+                          <div className="student-question-testcases">
+                            <strong>For example</strong>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Test</th>
+                                  <th>Expected</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {activeQuestion.testcases.map((pair, index) => (
+                                  <tr key={`${activeQuestion.id}-sample-${index}`}>
+                                    <td><pre>{pair.input || "Không có input"}</pre></td>
+                                    <td><pre>{pair.expected || "Chưa có expected"}</pre></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className={`student-question-answer-panel ${isQuestionAnswerExpanded ? "expanded" : ""}`}>
+                        <div className="student-question-answer">
+                          <div className="student-question-answer-header">
+                            <div>
+                              <strong>Trả lời câu {activeQuestionIndex + 1}</strong>
+                              <span>{activeQuestion.kind === "SINGLE_CHOICE" ? "Chọn 1 đáp án" : "Nhập đáp án cho câu này"}</span>
+                            </div>
+                            <div className="student-question-answer-actions">
+                              {activeQuestion.kind !== "SINGLE_CHOICE" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="answer-tool-button"
+                                    onClick={() => setQuestionEditorSize((current) => current === "normal" ? "large" : "normal")}
+                                  >
+                                    {questionEditorSize === "normal" ? "Phóng to" : "Thu nhỏ"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="answer-tool-button"
+                                    onClick={() => setIsQuestionAnswerExpanded((current) => !current)}
+                                  >
+                                    {isQuestionAnswerExpanded ? "Thu gọn" : "Mở rộng"}
+                                  </button>
+                                </>
+                              )}
+                              <span className={isQuestionAnswered(activeQuestion) ? "answer-state done" : "answer-state"}>
+                                {isQuestionAnswered(activeQuestion) ? "Đã làm" : "Chưa làm"}
+                              </span>
+                            </div>
+                          </div>
+                          {activeQuestion.kind === "SINGLE_CHOICE" ? (
+                            <div className="student-choice-list">
+                              {activeQuestion.options.map((option, optionIndex) => {
+                                const value = String.fromCharCode(65 + optionIndex);
+                                return (
+                                  <label key={`${activeQuestion.id}-answer-${optionIndex}`} className={questionAnswers[activeQuestion.id] === value ? "selected" : ""}>
+                                    <input
+                                      type="radio"
+                                      name={`answer-${activeQuestion.id}`}
+                                      checked={questionAnswers[activeQuestion.id] === value}
+                                      disabled={isReviewingSubmittedWork}
+                                      onChange={() => setQuestionAnswers((current) => ({ ...current, [activeQuestion.id]: value }))}
+                                    />
+                                    <span>{value}</span>
+                                    <strong>{option || `Đáp án ${value}`}</strong>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <textarea
+                              className={`form-control student-question-code ${questionEditorSize === "large" ? "large" : ""}`}
+                              value={questionAnswers[activeQuestion.id] ?? activeQuestion.starterCode}
+                              readOnly={isReviewingSubmittedWork}
+                              onChange={(e) => setQuestionAnswers((current) => ({ ...current, [activeQuestion.id]: e.target.value }))}
+                              placeholder={selectedFlow.editorPlaceholder}
+                            />
+                          )}
+                          <div className="student-question-navigation-row">
+                            <button type="button" className="btn btn-secondary" onClick={() => goToRelativeQuestion(-1)} disabled={activeQuestionIndex === 0}>
+                              Câu trước
+                            </button>
+                            <button type="button" className="btn btn-secondary" onClick={() => goToRelativeQuestion(1)} disabled={activeQuestionIndex >= totalQuestionCount - 1}>
+                              Câu sau
+                            </button>
+                          </div>
+                          {activeQuestion.kind !== "SINGLE_CHOICE" && (
+                            <div className="student-question-trial-row">
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => handleRunQuestionTrial(activeQuestion, activeQuestionIndex)}
+                                disabled={isReviewingSubmittedWork || runningTrialQuestionId === activeQuestion.id || activeQuestion.testcases.length === 0}
+                              >
+                                {runningTrialQuestionId === activeQuestion.id ? "Đang chạy thử..." : "Chạy thử testcase câu này"}
+                              </button>
+                              <span>{activeQuestion.testcases.length} testcase mẫu</span>
+                            </div>
+                          )}
+                          {renderTrialResult(activeQuestion)}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </section>
+              </div>
+              ) : (
+              <div className="student-submit-workspace">
+                <aside className="student-submit-material-panel">
+                  <div className="student-submit-panel-header">
+                    <span>{selectedFlow.label}</span>
+                    <strong>Đề bài & dữ liệu được giao</strong>
+                    <p>{selectedFlow.workHint}</p>
+                  </div>
+
+                  <section>
+                    <span>{selectedFlow.primaryMaterialLabel}</span>
+                    <pre>{contentPreview(selectedAsm.problem_statement || selectedAsm.description)}</pre>
+                  </section>
+                  {selectedFlow.starterLabel && (
+                    <section>
+                      <span>{selectedFlow.starterLabel}</span>
+                      <pre>{contentPreview(buildStudentStarter(selectedAsm), "Giảng viên chưa cung cấp starter/template.")}</pre>
+                    </section>
+                  )}
+                  <section>
+                    <span>{selectedFlow.configLabel}</span>
+                    <pre>{contentPreview(selectedAsm.type_config, "Không có cấu hình riêng.")}</pre>
+                  </section>
+                  {selectedAsm.testcase_samples && (
+                    <section>
+                      <span>{selectedFlow.testcaseLabel}</span>
+                      <div className="student-testcase-pairs">
+                        {parseTestcasePairs(selectedAsm.testcase_samples).map((pair, index) => (
+                          <div key={`student-testcase-${index}`}>
+                            <code>{pair.input || "Không có input"}</code>
+                            <strong>{pair.expected || "Chưa có expected output"}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </aside>
+
+                <section className="student-submit-work-panel">
+                  <div className="student-submit-steps">
+                    <div>
+                      <span>1</span>
+                      <strong>Đọc đề</strong>
+                    </div>
+                    <div>
+                      <span>2</span>
+                      <strong>Làm bài</strong>
+                    </div>
+                    <div>
+                      <span>3</span>
+                      <strong>Nộp & xem lịch sử</strong>
+                    </div>
+                  </div>
+
+                  <div className="student-submit-choice">
+                    <div>
+                      <strong>Làm trực tiếp hoặc nộp file</strong>
+                      <p>{selectedAsm.assignment_type === "PROJECT" ? "Với project, nên nộp zip đầy đủ. Editor chỉ dùng cho README hoặc ghi chú nộp bài." : "Dùng editor nếu bài chỉ có một file; dùng file đính kèm nếu bài có nhiều file hoặc cần nộp zip."}</p>
+                    </div>
+                    <div className="submit-mode-toggle" role="tablist" aria-label="Chọn cách nộp bài">
+                      <button
+                        type="button"
+                        className={submitMode === "editor" ? "active" : ""}
+                        onClick={() => setSubmitMode("editor")}
+                      >
+                        Editor
+                      </button>
+                      <button
+                        type="button"
+                        className={submitMode === "file" ? "active" : ""}
+                        onClick={() => setSubmitMode("file")}
+                      >
+                        File đính kèm
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="submit-mode-panel">
+                    {submitMode === "editor" && (
+                    <div className="tech-panel student-submit-method" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
+                  <h3 className="tech-panel-title">Phương án 1: Làm trực tiếp trong editor</h3>
                   <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label className="form-label">Tên tệp tin (ví dụ: solution.cpp, kNN.cpp)</label>
+                    <label className="form-label">Tên tệp nộp</label>
                     <input
                       type="text"
                       className="form-control"
@@ -989,11 +1915,12 @@ export default function StudentDashboard() {
                     />
                   </div>
                   <div className="form-group" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                    <label className="form-label">Mã nguồn của bạn</label>
+                    <label className="form-label">{selectedFlow.editorLabel}</label>
                     <textarea
                       className="form-control"
                       value={editorContent}
                       onChange={(e) => setEditorContent(e.target.value)}
+                      placeholder={selectedFlow.editorPlaceholder}
                       style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", flex: 1, minHeight: "220px", resize: "vertical" }}
                     />
                   </div>
@@ -1003,13 +1930,14 @@ export default function StudentDashboard() {
                     disabled={isSubmitting}
                     style={{ marginTop: "1rem", alignSelf: "flex-end" }}
                   >
-                    {isSubmitting ? "Đang chấm..." : "Nộp nội dung trong editor"}
+                    {isSubmitting ? "Đang gửi..." : selectedFlow.submitLabel}
                   </button>
                 </div>
+                    )}
 
-                {/* Method 2: Drag & Drop C++ source files */}
-                <div className="tech-panel" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
-                  <h3 className="tech-panel-title">Phương án 2: Kéo & thả file mã nguồn</h3>
+                    {submitMode === "file" && (
+                <div className="tech-panel student-submit-method" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
+                  <h3 className="tech-panel-title">Phương án 2: Nộp file đính kèm</h3>
                   
                   <div
                     className={`upload-zone ${dragActive ? "drag-active" : ""}`}
@@ -1026,7 +1954,7 @@ export default function StudentDashboard() {
                         ? "Đang đọc file..."
                         : encodedSolutionFiles.length > 0
                           ? `Đã sẵn sàng: ${encodedSolutionFiles.map(f => f.filename).join(', ')}`
-                          : "Kéo thả .zip hoặc chọn lần lượt kNN.cpp, kNN.hpp"}
+                          : selectedFlow.fileHint}
                     </div>
                     <div style={{ marginTop: "0.5rem", color: "hsl(var(--text-muted))", fontSize: "0.82rem", lineHeight: 1.5 }}>
                       Có thể chọn nhiều file cùng lúc hoặc chọn từng file nhiều lần; hệ thống sẽ tự cộng dồn theo tên file.
@@ -1034,7 +1962,7 @@ export default function StudentDashboard() {
                     <input
                       type="file"
                       multiple
-                      accept=".cpp,.c,.h,.hpp,.zip"
+                      accept={selectedAcceptedFiles}
                       ref={fileInputRef}
                       onChange={handleFileChange}
                       style={{ display: "none" }}
@@ -1057,13 +1985,17 @@ export default function StudentDashboard() {
                       onClick={() => handleSubmitSolution("file")}
                       disabled={isSubmitting || isEncodingFiles || encodedSolutionFiles.length === 0}
                     >
-                      {isSubmitting ? "Đang gửi chấm..." : isEncodingFiles ? "Đang đọc file..." : "Nộp file đính kèm"}
+                      {isSubmitting ? "Đang gửi..." : isEncodingFiles ? "Đang đọc file..." : selectedFlow.submitLabel}
                     </button>
                   </div>
                 </div>
+                    )}
+                  </div>
+                </section>
               </div>
+              )}
 
-              {submitSuccess && (
+              {submitSuccess && selectedQuestions.length === 0 && (
                 <div style={{ marginTop: "1.5rem", padding: "1rem", background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "var(--radius-sm)", color: "hsl(var(--color-success))" }}>
                   Gửi bài nộp thành công! Kết quả chấm đang được hiển thị ở tab lịch sử.
                 </div>

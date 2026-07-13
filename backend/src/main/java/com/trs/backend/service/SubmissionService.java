@@ -18,14 +18,18 @@ import org.springframework.web.client.RestTemplate;
 
 import com.trs.backend.dto.GraderPayload;
 import com.trs.backend.dto.GraderPayloadFile;
+import com.trs.backend.dto.GraderPayloadTestcase;
 import com.trs.backend.dto.GraderResult;
 import com.trs.backend.entity.Recommendation;
 import com.trs.backend.entity.Submission;
 import com.trs.backend.repository.RecommendationRepository;
 import com.trs.backend.repository.SubmissionRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class SubmissionService {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private final SubmissionRepository submissionRepository;
     private final RecommendationRepository recommendationRepository;
     private final RecommendationService recommendationService;
@@ -88,6 +92,21 @@ public class SubmissionService {
         }
     }
 
+    public GraderResult gradeTrial(GraderPayload payload) {
+        ResponseEntity<GraderResult> response = restTemplate.postForEntity(graderUrl, payload, GraderResult.class);
+        GraderResult result = response.getBody();
+        if (!response.getStatusCode().is2xxSuccessful() || result == null) {
+            return new GraderResult(
+                    "FAILED",
+                    Map.of(),
+                    Map.of(),
+                    null,
+                    "Grader service returned status code " + response.getStatusCode().value()
+            );
+        }
+        return result;
+    }
+
     public static List<GraderPayloadFile> readPayloadFiles(List<Map<String, Object>> savedFiles) {
         return savedFiles.stream().map(file -> {
             String filename = String.valueOf(file.getOrDefault("filename", ""));
@@ -100,5 +119,50 @@ public class SubmissionService {
             }
             return new GraderPayloadFile(filename, path, content);
         }).toList();
+    }
+
+    public static List<GraderPayloadTestcase> readCustomTestcases(String testcaseSamples) {
+        if (testcaseSamples == null || testcaseSamples.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            List<Map<String, Object>> parsed = OBJECT_MAPPER.readValue(
+                    testcaseSamples,
+                    new TypeReference<List<Map<String, Object>>>() {
+                    }
+            );
+            return parsed.stream()
+                    .map(item -> new GraderPayloadTestcase(
+                            String.valueOf(item.getOrDefault("input", "")).trim(),
+                            String.valueOf(item.getOrDefault("expected", item.getOrDefault("output", ""))).trim(),
+                            readInteger(item.get("question"))
+                    ))
+                    .filter(item -> !item.input().isBlank() || !item.expected().isBlank())
+                    .toList();
+        } catch (Exception ignored) {
+            return testcaseSamples.lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isBlank())
+                    .map(line -> {
+                        String[] parts = line.split("\\s*(?:->|=>|\\|)\\s*", 2);
+                        String input = parts.length > 0 ? parts[0].trim() : "";
+                        String expected = parts.length > 1 ? parts[1].trim() : "";
+                        return new GraderPayloadTestcase(input, expected, null);
+                    })
+                    .filter(item -> !item.input().isBlank() || !item.expected().isBlank())
+                    .toList();
+        }
+    }
+
+    private static Integer readInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 }

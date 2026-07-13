@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import mammoth from "mammoth";
 
 interface Assignment {
   id: string;
@@ -60,6 +61,243 @@ type TeacherTab = "assignments" | "import" | "teachers" | "students" | "analytic
 
 type AssignmentType = "STANDARD" | "FILL_BLANK" | "DEBUGGING" | "PROJECT" | "QUIZ_CODE";
 type GenerationStrategy = "MUTATION" | "BOUNDARY" | "RANDOMIZED" | "PAIRWISE";
+type TestcasePair = { input: string; expected: string };
+type QuestionKind = "CODE" | "TEXT" | "SINGLE_CHOICE";
+type AssignmentQuestion = {
+  id: string;
+  title: string;
+  prompt: string;
+  points: number;
+  kind: QuestionKind;
+  starterCode: string;
+  referenceAnswer: string;
+  options: string[];
+  correctOption: number;
+  testcases: TestcasePair[];
+};
+
+type StructuredAssignmentConfig = {
+  version: 1;
+  mode: "QUESTION_SET";
+  questions: AssignmentQuestion[];
+};
+
+const DEFAULT_TESTCASE_PAIRS: TestcasePair[] = [
+  { input: "1", expected: "NO" },
+  { input: "2", expected: "YES" },
+  { input: "9", expected: "NO" },
+  { input: "17", expected: "YES" },
+  { input: "100", expected: "NO" },
+];
+
+const createQuestion = (type: AssignmentType, index = 1): AssignmentQuestion => ({
+  id: `${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
+  title: `Câu ${index}`,
+  prompt: type === "QUIZ_CODE"
+    ? "Chọn đáp án đúng nhất."
+    : "Viết lời giải cho yêu cầu dưới đây.",
+  points: 1,
+  kind: type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE",
+  starterCode: "",
+  referenceAnswer: "",
+  options: ["", "", "", ""],
+  correctOption: 0,
+  testcases: type === "QUIZ_CODE" ? [] : [{ input: "", expected: "" }],
+});
+
+const normalizeQuestion = (item: Partial<AssignmentQuestion>, index: number, type: AssignmentType): AssignmentQuestion => ({
+  ...createQuestion(type, index + 1),
+  ...item,
+  id: String(item.id || `q-${index + 1}`),
+  title: String(item.title || `Câu ${index + 1}`),
+  prompt: String(item.prompt || ""),
+  points: Number(item.points) || 1,
+  kind: (item.kind === "TEXT" || item.kind === "SINGLE_CHOICE" || item.kind === "CODE")
+    ? item.kind
+    : (type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE"),
+  options: Array.from({ length: 4 }, (_, optionIndex) => String(item.options?.[optionIndex] || "")),
+  correctOption: Math.min(3, Math.max(0, Number(item.correctOption) || 0)),
+  testcases: Array.isArray(item.testcases)
+    ? item.testcases.map((pair) => ({
+        input: String(pair?.input || ""),
+        expected: String(pair?.expected || ""),
+      }))
+    : [],
+});
+
+const parseQuestionConfig = (value: string | undefined, type: AssignmentType): AssignmentQuestion[] => {
+  if (!value || !value.trim()) return [createQuestion(type, 1)];
+  try {
+    const parsed = JSON.parse(value) as Partial<StructuredAssignmentConfig> | Partial<AssignmentQuestion>[];
+    const questions = Array.isArray(parsed) ? parsed : parsed.questions;
+    if (Array.isArray(questions) && questions.length > 0) {
+      return questions.map((item, index) => normalizeQuestion(item, index, type));
+    }
+  } catch {
+    // Older assignments stored a plain config string.
+  }
+  return [createQuestion(type, 1)];
+};
+
+const stripMarker = (line: string, marker: string) =>
+  line.replace(new RegExp(`^\\s*${marker}\\s*[:：-]?\\s*`, "i"), "").trim();
+
+const parseOptionLine = (line: string) => {
+  const match = line.match(/^\s*([A-D])[\).:：-]\s*(.+)$/i);
+  return match ? { index: match[1].toUpperCase().charCodeAt(0) - 65, value: match[2].trim() } : null;
+};
+
+const splitQuestionDocument = (content: string, type: AssignmentType): AssignmentQuestion[] => {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [createQuestion(type, 1)];
+
+  const chunks = normalized
+    .split(/(?=^\s*(?:#{1,3}\s*)?(?:Câu|Cau|C\?u|Question)\s+\d+[\).:\-]?\s*)/gim)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  const sourceChunks = chunks.length > 0 ? chunks : [normalized];
+
+  return sourceChunks.map((chunk, index) => {
+    const question = createQuestion(type, index + 1);
+    const lines = chunk.split("\n").map((line) => line.trimEnd());
+    const firstLine = lines[0] || `Câu ${index + 1}`;
+    question.title = firstLine.replace(/^#{1,3}\s*/, "").replace(/^(Câu|Cau|C\?u|Question)\s+\d+[\).:\-]?\s*/i, "").trim() || `Câu ${index + 1}`;
+    question.kind = type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE";
+    question.options = ["", "", "", ""];
+    question.testcases = [];
+
+    const promptLines: string[] = [];
+    let activeSection: "prompt" | "starter" | "answer" | "test" | "expected" = "prompt";
+    let pendingTest = "";
+    let pendingExpected = "";
+
+    const flushTestcase = () => {
+      if (pendingTest.trim() || pendingExpected.trim()) {
+        question.testcases.push({ input: pendingTest.trim(), expected: pendingExpected.trim() });
+      }
+      pendingTest = "";
+      pendingExpected = "";
+    };
+
+    for (const rawLine of lines.slice(1)) {
+      const line = rawLine.trim();
+      const option = parseOptionLine(rawLine);
+      if (option) {
+        question.kind = "SINGLE_CHOICE";
+        question.options[option.index] = option.value;
+        activeSection = "prompt";
+        continue;
+      }
+
+      if (/^(Đáp án|Dap an|Answer)\s*[:：-]/i.test(line)) {
+        const value = stripMarker(line, "(Đáp án|Dap an|Answer)");
+        const optionAnswer = value.match(/^[A-D]$/i);
+        if (optionAnswer) {
+          question.correctOption = optionAnswer[0].toUpperCase().charCodeAt(0) - 65;
+          question.kind = "SINGLE_CHOICE";
+        } else {
+          question.referenceAnswer = value;
+          activeSection = "answer";
+        }
+        continue;
+      }
+
+      if (/^(Starter|Starter code|Khung code)\s*[:：-]/i.test(line)) {
+        question.starterCode = stripMarker(line, "(Starter code|Starter|Khung code)");
+        activeSection = "starter";
+        continue;
+      }
+
+      if (/^(Test|Input)\s*[:：-]/i.test(line)) {
+        flushTestcase();
+        pendingTest = stripMarker(line, "(Test|Input)");
+        activeSection = "test";
+        continue;
+      }
+
+      if (/^(Expected|Output|Result)\s*[:：-]/i.test(line)) {
+        pendingExpected = stripMarker(line, "(Expected|Output|Result)");
+        activeSection = "expected";
+        continue;
+      }
+
+      if (/^---+$/.test(line)) {
+        flushTestcase();
+        activeSection = "prompt";
+        continue;
+      }
+
+      if (activeSection === "starter") {
+        question.starterCode += `${question.starterCode ? "\n" : ""}${rawLine}`;
+      } else if (activeSection === "answer") {
+        question.referenceAnswer += `${question.referenceAnswer ? "\n" : ""}${rawLine}`;
+      } else if (activeSection === "test") {
+        pendingTest += `${pendingTest ? "\n" : ""}${rawLine}`;
+      } else if (activeSection === "expected") {
+        pendingExpected += `${pendingExpected ? "\n" : ""}${rawLine}`;
+      } else if (line) {
+        promptLines.push(rawLine);
+      }
+    }
+
+    flushTestcase();
+    question.prompt = promptLines.join("\n").trim() || question.prompt;
+    if (question.kind === "SINGLE_CHOICE") {
+      question.testcases = [];
+    } else if (question.testcases.length === 0) {
+      question.testcases = [{ input: "", expected: "" }];
+    }
+    return question;
+  });
+};
+
+const serializeQuestionConfig = (questions: AssignmentQuestion[]) =>
+  JSON.stringify({
+    version: 1,
+    mode: "QUESTION_SET",
+    questions,
+  } satisfies StructuredAssignmentConfig);
+
+const questionSetProblem = (questions: AssignmentQuestion[]) =>
+  questions.map((question, index) => [
+    `${index + 1}. ${question.title || `Câu ${index + 1}`}`,
+    question.prompt,
+    question.kind === "SINGLE_CHOICE"
+      ? question.options.map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option}`).join("\n")
+      : "",
+  ].filter(Boolean).join("\n")).join("\n\n");
+
+const questionSetReference = (questions: AssignmentQuestion[]) =>
+  questions.map((question, index) => {
+    const answer = question.kind === "SINGLE_CHOICE"
+      ? `${String.fromCharCode(65 + question.correctOption)}. ${question.options[question.correctOption] || ""}`
+      : question.referenceAnswer;
+    return `${index + 1}. ${question.title}: ${answer || "Chưa nhập đáp án chuẩn"}`;
+  }).join("\n");
+
+const questionSetTestcases = (questions: AssignmentQuestion[]) =>
+  questions.flatMap((question, questionIndex) =>
+    question.testcases
+      .filter((pair) => pair.input.trim() || pair.expected.trim())
+      .map((pair, testcaseIndex) => ({
+        input: pair.input,
+        expected: pair.expected,
+        question: questionIndex + 1,
+        testcase: testcaseIndex + 1,
+      }))
+  );
+
+const readAssignmentImportContent = async (file: File) => {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".zip")) {
+    return `Imported starter archive: ${file.name}`;
+  }
+  if (lowerName.endsWith(".docx")) {
+    const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+    return result.value;
+  }
+  return file.text();
+};
 
 const ASSIGNMENT_TYPES: Array<{ value: AssignmentType; label: string; hint: string }> = [
   { value: "STANDARD", label: "Bài thường", hint: "Nộp mã nguồn và chấm bằng testcase." },
@@ -87,8 +325,39 @@ const GENERATION_STRATEGIES: Array<{ value: GenerationStrategy; label: string; h
   { value: "PAIRWISE", label: "Tổ hợp cặp", hint: "Kết hợp từng cặp tham số quan trọng." },
 ];
 
-const countSeedTestcases = (value: string) =>
-  value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
+const parseTestcasePairs = (value?: string): TestcasePair[] => {
+  if (!value || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => ({
+          input: String(item?.input ?? "").trim(),
+          expected: String(item?.expected ?? item?.output ?? "").trim(),
+        }))
+        .filter((item) => item.input || item.expected);
+    }
+  } catch {
+    // Support old plain-text testcase samples.
+  }
+
+  return value.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/\s*(?:->|=>|\|)\s*/);
+      return {
+        input: (parts[0] || "").trim(),
+        expected: (parts.slice(1).join(" ").trim()),
+      };
+    });
+};
+
+const serializeTestcasePairs = (pairs: TestcasePair[]) =>
+  JSON.stringify(pairs.filter((pair) => pair.input.trim() || pair.expected.trim()));
+
+const countSeedTestcases = (pairs: TestcasePair[]) =>
+  pairs.filter((pair) => pair.input.trim() && pair.expected.trim()).length;
 
 const mutateNumber = (raw: string, offset: number, strategy: GenerationStrategy) => {
   const value = Number(raw);
@@ -102,13 +371,16 @@ const mutateNumber = (raw: string, offset: number, strategy: GenerationStrategy)
   return String(value + offset + 1);
 };
 
-const generateTestcases = (samples: string, targetCount: number, strategy: GenerationStrategy) => {
-  const seeds = samples.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+const generateTestcases = (samples: TestcasePair[], targetCount: number, strategy: GenerationStrategy) => {
+  const seeds = samples.filter((pair) => pair.input.trim());
   if (seeds.length === 0 || targetCount <= 0) return [];
   return Array.from({ length: targetCount }, (_, index) => {
     const seed = seeds[index % seeds.length];
-    const mutated = seed.replace(/-?\d+(\.\d+)?/g, (match) => mutateNumber(match, index, strategy));
-    return mutated === seed ? `${seed} # variant ${index + 1}` : mutated;
+    const mutated = seed.input.replace(/-?\d+(\.\d+)?/g, (match) => mutateNumber(match, index, strategy));
+    return {
+      input: mutated === seed.input ? `${seed.input} # variant ${index + 1}` : mutated,
+      expected: "Cần xác nhận",
+    };
   });
 };
 
@@ -155,6 +427,117 @@ const typeConfigPlaceholder = (type: AssignmentType) => {
   return "Ví dụ: time_limit=2s; memory=256MB; public_tests=10.";
 };
 
+const ASSIGNMENT_FLOW: Record<
+  AssignmentType,
+  {
+    label: string;
+    summary: string;
+    importHint: string;
+    problemLabel: string;
+    problemPlaceholder: string;
+    starterLabel?: string;
+    starterPlaceholder?: string;
+    solutionLabel: string;
+    solutionPlaceholder: string;
+    configLabel: string;
+    configPlaceholder: string;
+    testcaseTitle: string;
+    testcaseHint: string;
+    requireStarter: boolean;
+    requireTestcases: boolean;
+    requirements: string[];
+  }
+> = {
+  STANDARD: {
+    label: "Bài lập trình",
+    summary: "Dùng khi sinh viên nộp source code và hệ thống chấm bằng testcase.",
+    importHint: "Import .md/.txt để điền đề bài, hoặc file code để tham khảo khi viết đề.",
+    problemLabel: "Đề bài cho sinh viên",
+    problemPlaceholder: "Mô tả bài toán, input/output, ràng buộc, ví dụ và yêu cầu nộp.",
+    solutionLabel: "Lời giải tham chiếu",
+    solutionPlaceholder: "Dán lời giải chuẩn để đối chiếu và hỗ trợ sinh testcase.",
+    configLabel: "Cấu hình chấm",
+    configPlaceholder: "Ví dụ: time_limit=2s; memory=256MB; public_tests=10.",
+    testcaseTitle: "Testcase chấm tự động",
+    testcaseHint: "Mỗi dòng là một testcase seed. Có thể import file mẫu rồi sinh thêm biến thể.",
+    requireStarter: false,
+    requireTestcases: true,
+    requirements: ["Đề bài", "Lời giải chuẩn", "Testcase mẫu"],
+  },
+  FILL_BLANK: {
+    label: "Bài đục lỗ",
+    summary: "Dùng khi giảng viên có code hoàn chỉnh/template và muốn sinh phần khuyết cho sinh viên điền.",
+    importHint: "Import code hoàn chỉnh. Nếu có vùng muốn đục thủ công, đánh dấu /* HOLE:start */ ... /* HOLE:end */.",
+    problemLabel: "Yêu cầu ngắn cho sinh viên",
+    problemPlaceholder: "Nêu mục tiêu cần hoàn thiện, hàm/lớp không được đổi và định dạng nộp.",
+    starterLabel: "Code hoàn chỉnh / template để đục lỗ",
+    starterPlaceholder: "Dán code hoàn chỉnh hoặc template có marker HOLE. Hệ thống lưu phần này làm nguồn sinh starter.",
+    solutionLabel: "Đáp án hoàn chỉnh",
+    solutionPlaceholder: "Nếu khác template, dán bản chuẩn cuối cùng để chấm nội bộ.",
+    configLabel: "Quy tắc đục lỗ",
+    configPlaceholder: "Ví dụ: auto_holes=3; preserve_imports=true; required_regions=solve,compare.",
+    testcaseTitle: "Testcase kiểm chứng lỗ trống",
+    testcaseHint: "Testcase nên kiểm chứng đúng phần sinh viên phải điền, không cần quá nhiều cấu hình ngoài luồng.",
+    requireStarter: true,
+    requireTestcases: true,
+    requirements: ["Template/code hoàn chỉnh", "Quy tắc đục lỗ", "Testcase kiểm chứng"],
+  },
+  DEBUGGING: {
+    label: "Bài sửa lỗi",
+    summary: "Dùng khi sinh viên nhận code lỗi và phải sửa để vượt testcase.",
+    importHint: "Import file code lỗi. Lời giải đã sửa nhập ở vùng đáp án chuẩn.",
+    problemLabel: "Hành vi đúng mong muốn",
+    problemPlaceholder: "Mô tả output đúng, điều kiện biên và phần API sinh viên không được thay đổi.",
+    starterLabel: "Code lỗi giao cho sinh viên",
+    starterPlaceholder: "Dán code đang lỗi. Giữ nguyên public API nếu testcase phụ thuộc vào tên hàm/lớp.",
+    solutionLabel: "Code đã sửa / lời giải chuẩn",
+    solutionPlaceholder: "Dán bản đã sửa đúng để làm chuẩn đối chiếu.",
+    configLabel: "Mô tả lỗi cần bắt",
+    configPlaceholder: "Ví dụ: off-by-one ở biên phải; sai khi input rỗng; không xử lý số âm.",
+    testcaseTitle: "Testcase bắt lỗi",
+    testcaseHint: "Ưu tiên testcase lộ rõ bug, nhất là input biên và trường hợp từng làm code lỗi fail.",
+    requireStarter: true,
+    requireTestcases: true,
+    requirements: ["Code lỗi", "Mô tả lỗi", "Code đã sửa", "Testcase bắt lỗi"],
+  },
+  PROJECT: {
+    label: "Mini project",
+    summary: "Dùng cho bài nhiều file, starter project, rubric và test tích hợp.",
+    importHint: "Import .zip hoặc mô tả cây thư mục/starter files. Nếu browser không đọc được zip, tên file vẫn giúp ghi nhận nguồn import.",
+    problemLabel: "Brief dự án",
+    problemPlaceholder: "Mục tiêu dự án, tính năng bắt buộc, cách nộp, cấu trúc thư mục mong muốn.",
+    starterLabel: "Starter project / cấu trúc thư mục",
+    starterPlaceholder: "Dán cây thư mục, README starter, hoặc nội dung file chính.",
+    solutionLabel: "Ghi chú nghiệm thu / lời giải mẫu",
+    solutionPlaceholder: "Mô tả hành vi bản mẫu, checklist nghiệm thu hoặc link/nội dung solution nội bộ.",
+    configLabel: "Rubric / tiêu chí chấm",
+    configPlaceholder: "Ví dụ: 60% testcase, 20% kiến trúc, 20% báo cáo; bắt buộc có README và script chạy.",
+    testcaseTitle: "Smoke / integration tests",
+    testcaseHint: "Dán các input kiểm thử nhanh, script smoke test hoặc mô tả test tích hợp.",
+    requireStarter: true,
+    requireTestcases: false,
+    requirements: ["Brief dự án", "Starter project", "Rubric", "Smoke tests"],
+  },
+  QUIZ_CODE: {
+    label: "Quiz code",
+    summary: "Dùng cho câu hỏi ngắn về đọc hiểu code, chọn đáp án hoặc điền kết quả.",
+    importHint: "Import prompt hoặc snippet code để đưa vào câu hỏi.",
+    problemLabel: "Câu hỏi / snippet code",
+    problemPlaceholder: "Dán câu hỏi, đoạn code, các lựa chọn A/B/C/D nếu có.",
+    solutionLabel: "Đáp án và giải thích",
+    solutionPlaceholder: "Ghi đáp án đúng và giải thích ngắn để phản hồi cho sinh viên.",
+    configLabel: "Cấu hình quiz",
+    configPlaceholder: "Ví dụ: single-choice; shuffle=false; time_limit=10m; points=1.",
+    testcaseTitle: "Kiểm chứng tùy chọn",
+    testcaseHint: "Quiz thường không cần testcase. Chỉ dùng khi câu hỏi yêu cầu chạy code với input cụ thể.",
+    requireStarter: false,
+    requireTestcases: false,
+    requirements: ["Câu hỏi", "Đáp án", "Cấu hình quiz"],
+  },
+};
+
+const getAssignmentFlow = (type: AssignmentType) => ASSIGNMENT_FLOW[type] || ASSIGNMENT_FLOW.STANDARD;
+
 export default function TeacherDashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,11 +574,14 @@ export default function TeacherDashboard() {
   const [starterCode, setStarterCode] = useState("");
   const [referenceSolution, setReferenceSolution] = useState("");
   const [typeConfig, setTypeConfig] = useState("");
+  const [questionItems, setQuestionItems] = useState<AssignmentQuestion[]>([createQuestion("STANDARD", 1)]);
   const [languages, setLanguages] = useState<string[]>(["cpp"]);
   const [generationStrategy, setGenerationStrategy] = useState<GenerationStrategy>("MUTATION");
-  const [sampleTestcases, setSampleTestcases] = useState("1 2\n5 8\n10 20");
+  const [testcasePairs, setTestcasePairs] = useState<TestcasePair[]>(DEFAULT_TESTCASE_PAIRS);
   const [generatedCount, setGeneratedCount] = useState(20);
   const [teacherEmail, setTeacherEmail] = useState("");
+  const [studentForm, setStudentForm] = useState({ mssv: "", name: "", email: "" });
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -255,8 +641,13 @@ export default function TeacherDashboard() {
     const diffDays = Math.ceil(diffMs / 86400000);
     return { dateLabel, helper: diffDays <= 1 ? "Hôm nay" : `${diffDays} ngày` };
   };
-  const seedCount = countSeedTestcases(sampleTestcases);
-  const generatedPreview = generateTestcases(sampleTestcases, Math.min(generatedCount, 8), generationStrategy);
+  const seedCount = countSeedTestcases(testcasePairs);
+  const generatedPreview = generateTestcases(testcasePairs, Math.min(generatedCount, 8), generationStrategy);
+  const assignmentFlow = getAssignmentFlow(newType);
+  const isQuestionSetAssignment = newType === "STANDARD" || newType === "QUIZ_CODE";
+  const activeQuestions = isQuestionSetAssignment ? questionItems : [];
+  const questionTestcases = questionSetTestcases(activeQuestions);
+  const questionGeneratedPreview = generateTestcases(questionTestcases, Math.min(generatedCount, 8), generationStrategy);
 
   useEffect(() => {
     setAssignmentStatusNow(Date.now());
@@ -272,7 +663,7 @@ export default function TeacherDashboard() {
 
     const parsedUser = JSON.parse(storedUser) as TeacherUser;
     if (parsedUser.role !== "TEACHER") {
-      router.push("/student");
+      router.push("/login");
       return;
     }
 
@@ -367,9 +758,10 @@ export default function TeacherDashboard() {
     setStarterCode("");
     setReferenceSolution("");
     setTypeConfig("");
+    setQuestionItems([createQuestion("STANDARD", 1)]);
     setLanguages(["cpp"]);
     setGenerationStrategy("MUTATION");
-    setSampleTestcases("1 2\n5 8\n10 20");
+    setTestcasePairs(DEFAULT_TESTCASE_PAIRS);
     setGeneratedCount(20);
     setEditingAssignmentId(null);
     if (testcaseInputRef.current) testcaseInputRef.current.value = "";
@@ -391,9 +783,10 @@ export default function TeacherDashboard() {
     setStarterCode(assignment.starter_code || "");
     setReferenceSolution(assignment.reference_solution || "");
     setTypeConfig(assignment.type_config || "");
+    setQuestionItems(parseQuestionConfig(assignment.type_config, assignment.assignment_type || "STANDARD"));
     setLanguages(assignment.supported_languages?.length ? assignment.supported_languages : ["cpp"]);
     setGenerationStrategy(assignment.testcase_generation_strategy || "MUTATION");
-    setSampleTestcases(assignment.testcase_samples || "");
+    setTestcasePairs(parseTestcasePairs(assignment.testcase_samples));
     setGeneratedCount(assignment.generated_testcase_count || 0);
     setIsModalOpen(true);
   };
@@ -403,14 +796,14 @@ export default function TeacherDashboard() {
     description: newDesc,
     assignment_type: newType,
     supported_languages: languages.join(","),
-    testcase_samples: sampleTestcases,
+    testcase_samples: isQuestionSetAssignment ? JSON.stringify(questionTestcases) : serializeTestcasePairs(testcasePairs),
     testcase_generation_strategy: generationStrategy,
-    testcase_seed_count: seedCount,
+    testcase_seed_count: isQuestionSetAssignment ? questionTestcases.length : seedCount,
     generated_testcase_count: Math.max(0, generatedCount),
-    problem_statement: problemStatement,
-    starter_code: starterCode,
-    reference_solution: referenceSolution,
-    type_config: typeConfig,
+    problem_statement: isQuestionSetAssignment ? questionSetProblem(activeQuestions) : problemStatement,
+    starter_code: isQuestionSetAssignment ? activeQuestions.map((question) => question.starterCode).filter(Boolean).join("\n\n") : starterCode,
+    reference_solution: isQuestionSetAssignment ? questionSetReference(activeQuestions) : referenceSolution,
+    type_config: isQuestionSetAssignment ? serializeQuestionConfig(activeQuestions) : typeConfig,
     start_date: newStart,
     end_date: newEnd,
   });
@@ -419,6 +812,36 @@ export default function TeacherDashboard() {
     e.preventDefault();
     const token = localStorage.getItem("trs_token");
     if (!token || !newTitle || !newStart || !newEnd) return;
+
+    const flow = getAssignmentFlow(newType);
+    if (isQuestionSetAssignment && !questionItems.some((question) => question.prompt.trim())) {
+      alert("Vui lòng nhập ít nhất một câu hỏi.");
+      return;
+    }
+    if (newType === "QUIZ_CODE" && questionItems.some((question) => question.options.some((option) => !option.trim()))) {
+      alert("Mỗi câu trắc nghiệm cần đủ 4 đáp án.");
+      return;
+    }
+    if (!isQuestionSetAssignment && !problemStatement.trim()) {
+      alert(`Vui lòng nhập ${flow.problemLabel.toLowerCase()}.`);
+      return;
+    }
+    if (!isQuestionSetAssignment && flow.requireStarter && !starterCode.trim()) {
+      alert(`Vui lòng nhập ${flow.starterLabel?.toLowerCase() || "starter/template"}.`);
+      return;
+    }
+    if (!isQuestionSetAssignment && !referenceSolution.trim()) {
+      alert(`Vui lòng nhập ${flow.solutionLabel.toLowerCase()}.`);
+      return;
+    }
+    if (!isQuestionSetAssignment && !typeConfig.trim()) {
+      alert(`Vui lòng nhập ${flow.configLabel.toLowerCase()}.`);
+      return;
+    }
+    if (!isQuestionSetAssignment && flow.requireTestcases && seedCount === 0) {
+      alert("Vui lòng nhập hoặc import ít nhất một testcase mẫu.");
+      return;
+    }
 
     try {
       const response = await fetch(editingAssignmentId ? `/api/assignments/${editingAssignmentId}` : "/api/assignments", {
@@ -481,13 +904,89 @@ export default function TeacherDashboard() {
   const handleTestcaseFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSampleTestcases(await file.text());
+    setTestcasePairs(parseTestcasePairs(await file.text()));
+  };
+
+  const updateTestcasePair = (index: number, field: keyof TestcasePair, value: string) => {
+    setTestcasePairs((current) => current.map((pair, pairIndex) =>
+      pairIndex === index ? { ...pair, [field]: value } : pair
+    ));
+  };
+
+  const addTestcasePair = () => {
+    setTestcasePairs((current) => [...current, { input: "", expected: "" }]);
+  };
+
+  const removeTestcasePair = (index: number) => {
+    setTestcasePairs((current) => current.length <= 1 ? current : current.filter((_, pairIndex) => pairIndex !== index));
+  };
+
+  const addQuestionItem = () => {
+    setQuestionItems((current) => [...current, createQuestion(newType, current.length + 1)]);
+  };
+
+  const removeQuestionItem = (index: number) => {
+    setQuestionItems((current) => current.length <= 1 ? current : current.filter((_, questionIndex) => questionIndex !== index));
+  };
+
+  const updateQuestionItem = <K extends keyof AssignmentQuestion>(index: number, field: K, value: AssignmentQuestion[K]) => {
+    setQuestionItems((current) => current.map((question, questionIndex) =>
+      questionIndex === index ? { ...question, [field]: value } : question
+    ));
+  };
+
+  const updateQuestionOption = (questionIndex: number, optionIndex: number, value: string) => {
+    setQuestionItems((current) => current.map((question, index) => {
+      if (index !== questionIndex) return question;
+      const options = [...question.options];
+      options[optionIndex] = value;
+      return { ...question, options };
+    }));
+  };
+
+  const updateQuestionTestcase = (questionIndex: number, testcaseIndex: number, field: keyof TestcasePair, value: string) => {
+    setQuestionItems((current) => current.map((question, index) => {
+      if (index !== questionIndex) return question;
+      const testcases = question.testcases.map((pair, pairIndex) =>
+        pairIndex === testcaseIndex ? { ...pair, [field]: value } : pair
+      );
+      return { ...question, testcases };
+    }));
+  };
+
+  const addQuestionTestcase = (questionIndex: number) => {
+    setQuestionItems((current) => current.map((question, index) =>
+      index === questionIndex
+        ? { ...question, testcases: [...question.testcases, { input: "", expected: "" }] }
+        : question
+    ));
+  };
+
+  const removeQuestionTestcase = (questionIndex: number, testcaseIndex: number) => {
+    setQuestionItems((current) => current.map((question, index) =>
+      index === questionIndex
+        ? { ...question, testcases: question.testcases.length <= 1 ? question.testcases : question.testcases.filter((_, pairIndex) => pairIndex !== testcaseIndex) }
+        : question
+    ));
   };
 
   const handleAssignmentFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const content = await file.text();
+    const content = await readAssignmentImportContent(file);
+    if ((newType === "STANDARD" || newType === "QUIZ_CODE") && file.name.toLowerCase().endsWith(".json")) {
+      const importedQuestions = parseQuestionConfig(content, newType);
+      setQuestionItems(importedQuestions.length ? importedQuestions : [createQuestion(newType, 1)]);
+      if (!newTitle.trim()) setNewTitle(file.name.replace(/\.[^.]+$/, ""));
+      return;
+    }
+    if (newType === "STANDARD" || newType === "QUIZ_CODE") {
+      const importedQuestions = splitQuestionDocument(content, newType);
+      setQuestionItems(importedQuestions.length ? importedQuestions : [createQuestion(newType, 1)]);
+      if (!newTitle.trim()) setNewTitle(file.name.replace(/\.[^.]+$/, ""));
+      if (!newDesc.trim()) setNewDesc(`Import từ file ${file.name}`);
+      return;
+    }
     if (newType === "FILL_BLANK" || newType === "DEBUGGING" || newType === "PROJECT") {
       setStarterCode(content);
       if (!problemStatement.trim()) setProblemStatement(`File bài tập: ${file.name}`);
@@ -539,6 +1038,55 @@ export default function TeacherDashboard() {
       setUploadError("Lỗi kết nối máy chủ khi tải lên danh sách sinh viên.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleAddStudent = async (e: FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem("trs_token");
+    if (!token || !selectedAssignmentId || isAddingStudent) return;
+
+    const mssv = studentForm.mssv.trim();
+    const email = studentForm.email.trim();
+    const name = studentForm.name.trim();
+    if (!mssv || !email) {
+      setUploadMessage("");
+      setUploadError("Vui long nhap MSSV va email sinh vien.");
+      return;
+    }
+
+    setIsAddingStudent(true);
+    setUploadMessage("");
+    setUploadError("");
+
+    try {
+      const response = await fetch("/api/students", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          assignment_id: selectedAssignmentId,
+          class_section: classSection.trim() || "Default",
+          mssv,
+          name,
+          email,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUploadMessage(`Da them sinh vien ${email} vao lop ${data.class_section || classSection || "Default"}.`);
+        setStudentForm({ mssv: "", name: "", email: "" });
+        fetchStudents(selectedAssignmentId);
+      } else {
+        setUploadError(data.error || "Khong the them sinh vien.");
+      }
+    } catch {
+      setUploadError("Loi ket noi may chu khi them sinh vien.");
+    } finally {
+      setIsAddingStudent(false);
     }
   };
 
@@ -841,6 +1389,33 @@ export default function TeacherDashboard() {
                               />
                             </div>
                             <h4>Sinh viên</h4>
+                            <form onSubmit={handleAddStudent} className="student-quick-form">
+                              <div className="student-quick-grid">
+                                <input
+                                  className="form-control"
+                                  placeholder="MSSV"
+                                  value={studentForm.mssv}
+                                  onChange={(e) => setStudentForm((current) => ({ ...current, mssv: e.target.value }))}
+                                />
+                                <input
+                                  className="form-control"
+                                  placeholder="Ho ten"
+                                  value={studentForm.name}
+                                  onChange={(e) => setStudentForm((current) => ({ ...current, name: e.target.value }))}
+                                />
+                                <input
+                                  type="email"
+                                  className="form-control"
+                                  placeholder="email@sis.hust.edu.vn"
+                                  value={studentForm.email}
+                                  onChange={(e) => setStudentForm((current) => ({ ...current, email: e.target.value }))}
+                                />
+                              </div>
+                              <button type="submit" className="btn btn-secondary" disabled={isAddingStudent || !selectedAssignmentId}>
+                                {isAddingStudent ? "Dang them..." : "Them sinh vien"}
+                              </button>
+                            </form>
+                            <div className="people-tool-divider"><span>hoac import danh sach</span></div>
                             <input
                               type="file"
                               accept=".csv,.xlsx,.xls"
@@ -1312,13 +1887,34 @@ export default function TeacherDashboard() {
 
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-container">
+          <div className="modal-container assignment-builder-container">
             <div className="modal-header">
               <h3 className="modal-title">{editingAssignmentId ? "Sửa bài tập" : "Tạo bài tập lớn mới"}</h3>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>×</button>
             </div>
             <form onSubmit={handleAddAssignment}>
               <div className="modal-body">
+                <div className="assignment-builder-overview">
+                  <div>
+                    <span>Đang tạo</span>
+                    <strong>{assignmentFlow.label}</strong>
+                    <p>{assignmentFlow.summary}</p>
+                  </div>
+                  <ol>
+                    <li>Chọn dạng bài</li>
+                    <li>Nhập thông tin giao bài</li>
+                    <li>Đưa nội dung đúng dạng</li>
+                    <li>Cấu hình chấm và kiểm thử</li>
+                  </ol>
+                </div>
+
+                <div className="builder-step-heading">
+                  <span>1</span>
+                  <div>
+                    <strong>Thông tin nhận diện bài tập</strong>
+                    <p>Đặt tên, thời gian và mô tả ngắn để sinh viên biết đây là bài gì.</p>
+                  </div>
+                </div>
                 <div className="form-group">
                   <label className="form-label">Tên bài tập lớn</label>
                   <input
@@ -1330,7 +1926,14 @@ export default function TeacherDashboard() {
                     required
                   />
                 </div>
-                <div className="form-group">
+                <div className="builder-step-heading compact">
+                  <span>2</span>
+                  <div>
+                    <strong>Chọn đúng dạng bài</strong>
+                    <p>Dạng bài quyết định các trường bắt buộc và cách hệ thống hiểu file import.</p>
+                  </div>
+                </div>
+                <div className="form-group assignment-type-section">
                   <label className="form-label">Dạng bài</label>
                   <div className="assignment-type-grid">
                     {ASSIGNMENT_TYPES.map((type) => (
@@ -1338,12 +1941,32 @@ export default function TeacherDashboard() {
                         key={type.value}
                         type="button"
                         className={`assignment-type-option ${newType === type.value ? "selected" : ""}`}
-                        onClick={() => setNewType(type.value)}
+                        onClick={() => {
+                          setNewType(type.value);
+                          if (type.value === "STANDARD" || type.value === "QUIZ_CODE") {
+                            setQuestionItems((current) => current.map((question, index) => ({
+                              ...question,
+                              kind: type.value === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE",
+                              title: question.title || `Câu ${index + 1}`,
+                              options: type.value === "QUIZ_CODE" ? question.options : ["", "", "", ""],
+                              testcases: type.value === "QUIZ_CODE" ? [] : (question.testcases.length ? question.testcases : [{ input: "", expected: "" }]),
+                            })));
+                          }
+                        }}
                       >
-                        <strong>{type.label}</strong>
-                        <span>{type.hint}</span>
+                        <strong>{getAssignmentFlow(type.value).label}</strong>
+                        <span>{getAssignmentFlow(type.value).summary}</span>
                       </button>
                     ))}
+                  </div>
+                  <div className="assignment-flow-summary">
+                    <strong>{assignmentFlow.label}</strong>
+                    <span>{assignmentFlow.summary}</span>
+                    <div>
+                      {assignmentFlow.requirements.map((item) => (
+                        <em key={item}>{item}</em>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="form-group">
@@ -1361,12 +1984,19 @@ export default function TeacherDashboard() {
                     ))}
                   </div>
                 </div>
-                <div className="form-group">
+                <div className="builder-step-heading">
+                  <span>3</span>
+                  <div>
+                    <strong>Nội dung theo dạng {assignmentFlow.label}</strong>
+                    <p>{assignmentFlow.importHint}</p>
+                  </div>
+                </div>
+                <div className="form-group import-field">
                   <label className="form-label">Import file bài tập</label>
                   <input
                     type="file"
                     ref={assignmentFileInputRef}
-                    accept=".txt,.md,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.json,.zip"
+                    accept=".txt,.md,.docx,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.json,.zip"
                     onChange={handleAssignmentFileChange}
                   />
                   <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem" }}>
@@ -1403,70 +2033,278 @@ export default function TeacherDashboard() {
                     rows={4}
                   />
                 </div>
+                {isQuestionSetAssignment && (
+                  <div className="question-builder-panel">
+                    <div className="panel-title-row">
+                      <div>
+                        <h4>{newType === "QUIZ_CODE" ? "Danh sách câu trắc nghiệm" : "Danh sách câu hỏi lập trình"}</h4>
+                        <p>{newType === "QUIZ_CODE" ? "Mỗi câu có 4 đáp án, chọn một đáp án đúng." : "Mỗi câu có đề riêng, điểm riêng và testcase mẫu riêng để sinh viên hiểu cần làm gì."}</p>
+                      </div>
+                      <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
+                        Thêm câu hỏi
+                      </button>
+                    </div>
+                    <div className="question-builder-list">
+                      {questionItems.map((question, questionIndex) => (
+                        <div className="question-builder-card" key={question.id}>
+                          <div className="question-builder-card-header">
+                            <strong>{question.title || `Câu ${questionIndex + 1}`}</strong>
+                            <button type="button" className="btn btn-secondary" onClick={() => removeQuestionItem(questionIndex)}>
+                              Xóa câu
+                            </button>
+                          </div>
+                          <div className="question-builder-meta">
+                            <label>
+                              <span>Tiêu đề câu</span>
+                              <input
+                                className="form-control"
+                                value={question.title}
+                                onChange={(e) => updateQuestionItem(questionIndex, "title", e.target.value)}
+                                placeholder={`Câu ${questionIndex + 1}`}
+                              />
+                            </label>
+                            <label>
+                              <span>Điểm</span>
+                              <input
+                                className="form-control"
+                                type="number"
+                                min={0}
+                                step={0.25}
+                                value={question.points}
+                                onChange={(e) => updateQuestionItem(questionIndex, "points", Number(e.target.value))}
+                              />
+                            </label>
+                          </div>
+                          <label className="question-builder-field">
+                            <span>Nội dung câu hỏi</span>
+                            <textarea
+                              className="form-control"
+                              value={question.prompt}
+                              onChange={(e) => updateQuestionItem(questionIndex, "prompt", e.target.value)}
+                              rows={4}
+                              placeholder={newType === "QUIZ_CODE" ? "Ví dụ: Độ phức tạp của thuật toán binary search là gì?" : "Ví dụ: Define a function named ArrayShow to show elements of an integer array, size n."}
+                            />
+                          </label>
+                          {newType === "QUIZ_CODE" ? (
+                            <div className="question-options-grid">
+                              {question.options.map((option, optionIndex) => (
+                                <label key={`option-${question.id}-${optionIndex}`} className={question.correctOption === optionIndex ? "selected" : ""}>
+                                  <input
+                                    type="radio"
+                                    name={`correct-${question.id}`}
+                                    checked={question.correctOption === optionIndex}
+                                    onChange={() => updateQuestionItem(questionIndex, "correctOption", optionIndex)}
+                                  />
+                                  <span>{String.fromCharCode(65 + optionIndex)}</span>
+                                  <input
+                                    className="form-control"
+                                    value={option}
+                                    onChange={(e) => updateQuestionOption(questionIndex, optionIndex, e.target.value)}
+                                    placeholder={`Đáp án ${String.fromCharCode(65 + optionIndex)}`}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              <label className="question-builder-field">
+                                <span>Starter code / khung trả lời</span>
+                                <textarea
+                                  className="form-control testcase-textarea"
+                                  value={question.starterCode}
+                                  onChange={(e) => updateQuestionItem(questionIndex, "starterCode", e.target.value)}
+                                  rows={4}
+                                  placeholder="Ví dụ: void ArrayShow(int a[], int n) { ... }"
+                                />
+                              </label>
+                              <label className="question-builder-field">
+                                <span>Đáp án chuẩn / ghi chú chấm</span>
+                                <textarea
+                                  className="form-control testcase-textarea"
+                                  value={question.referenceAnswer}
+                                  onChange={(e) => updateQuestionItem(questionIndex, "referenceAnswer", e.target.value)}
+                                  rows={4}
+                                  placeholder="Dán lời giải tham chiếu hoặc mô tả output đúng."
+                                />
+                              </label>
+                              <div className="question-testcase-panel">
+                                <div className="testcase-pair-header">
+                                  <label className="form-label">Testcase của câu này</label>
+                                  <button type="button" className="btn btn-secondary" onClick={() => addQuestionTestcase(questionIndex)}>
+                                    Thêm testcase
+                                  </button>
+                                </div>
+                                <div className="question-testcase-table">
+                                  <div className="question-testcase-row heading">
+                                    <span>Test</span>
+                                    <span>Expected</span>
+                                    <span></span>
+                                  </div>
+                                  {question.testcases.map((pair, testcaseIndex) => (
+                                    <div className="question-testcase-row" key={`${question.id}-tc-${testcaseIndex}`}>
+                                      <textarea
+                                        className="form-control"
+                                        value={pair.input}
+                                        onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "input", e.target.value)}
+                                        rows={2}
+                                        placeholder="int n = 5; int Arr[] = {1,2,3,4,5}; ArrayShow(Arr,n);"
+                                      />
+                                      <textarea
+                                        className="form-control"
+                                        value={pair.expected}
+                                        onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "expected", e.target.value)}
+                                        rows={2}
+                                        placeholder="1 2 3 4 5"
+                                      />
+                                      <button type="button" className="btn btn-secondary" onClick={() => removeQuestionTestcase(questionIndex, testcaseIndex)}>
+                                        Xóa
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {isQuestionSetAssignment && (
+                  <div className="assignment-testcase-builder question-testcase-summary-panel">
+                    <div className="panel-title-row">
+                      <div>
+                        <h4>{newType === "QUIZ_CODE" ? "Chấm trắc nghiệm" : "Testcase & gợi ý"}</h4>
+                        <p>
+                          {newType === "QUIZ_CODE"
+                            ? "Trắc nghiệm được chấm theo đáp án đúng A/B/C/D đã chọn ở từng câu."
+                            : "Testcase được lấy trực tiếp từ từng câu hỏi. Có thể xem nhanh seed và preview testcase sinh thêm tại đây."}
+                        </p>
+                      </div>
+                      <span>{newType === "QUIZ_CODE" ? `${questionItems.length} câu` : `${questionTestcases.length} seed + ${generatedCount} generated`}</span>
+                    </div>
+
+                    {newType !== "QUIZ_CODE" && (
+                      <>
+                        <div className="question-testcase-controls">
+                          <label>
+                            <span>Chiến lược sinh</span>
+                            <select
+                              className="form-control"
+                              value={generationStrategy}
+                              onChange={(e) => setGenerationStrategy(e.target.value as GenerationStrategy)}
+                            >
+                              {GENERATION_STRATEGIES.map((strategy) => (
+                                <option key={strategy.value} value={strategy.value}>
+                                  {strategy.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Số testcase sinh thêm</span>
+                            <input
+                              className="form-control"
+                              type="number"
+                              min={0}
+                              max={500}
+                              value={generatedCount}
+                              onChange={(e) => setGeneratedCount(Number(e.target.value))}
+                            />
+                          </label>
+                        </div>
+
+                        <div className="question-testcase-preview-grid">
+                          <div>
+                            <div className="compact-section-heading">
+                              <h4>Seed từ câu hỏi</h4>
+                              <span className="panel-count-pill">{questionTestcases.length} TC</span>
+                            </div>
+                            <pre>{questionTestcases.slice(0, 8).map((pair, index) => `Câu ${pair.question || "-"} / TC ${index + 1}\nTest: ${pair.input}\nExpected: ${pair.expected}`).join("\n\n") || "Chưa có testcase. Thêm Test/Expected trong từng câu hỏi."}</pre>
+                          </div>
+                          <div>
+                            <div className="compact-section-heading">
+                              <h4>Gợi ý sinh thêm</h4>
+                              <span>{strategyLabel(generationStrategy)}</span>
+                            </div>
+                            <pre>{questionGeneratedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n") || "Thêm testcase seed để xem preview."}</pre>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                {!isQuestionSetAssignment && (
+                <>
                 <div className="assignment-logic-panel">
                   <div className="panel-title-row">
                     <div>
-                      <h4>{typeLabel(newType)} cần dữ liệu gì?</h4>
-                      <p>{assignmentTypeGuide(newType)}</p>
+                      <h4>{assignmentFlow.label}</h4>
+                      <p>{assignmentFlow.importHint}</p>
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Đề bài hiển thị cho sinh viên</label>
+                    <label className="form-label">{assignmentFlow.problemLabel}</label>
                     <textarea
                       className="form-control"
                       value={problemStatement}
                       onChange={(e) => setProblemStatement(e.target.value)}
                       rows={4}
-                      placeholder="Nhập đề bài, input/output, ràng buộc và yêu cầu nộp..."
+                      placeholder={assignmentFlow.problemPlaceholder}
                     />
                   </div>
-                  {(newType === "FILL_BLANK" || newType === "DEBUGGING" || newType === "PROJECT") && (
+                  {assignmentFlow.starterLabel && (
                     <div className="form-group">
-                      <label className="form-label">
-                        {newType === "FILL_BLANK" ? "Bài hoàn chỉnh / template trước khi đục lỗ" : newType === "DEBUGGING" ? "Code lỗi giao cho sinh viên" : "Cấu trúc project / file starter"}
-                      </label>
+                      <label className="form-label">{assignmentFlow.starterLabel}</label>
                       <textarea
                         className="form-control testcase-textarea"
                         value={starterCode}
                         onChange={(e) => setStarterCode(e.target.value)}
                         rows={7}
-                        placeholder={newType === "FILL_BLANK" ? "Dán code hoàn chỉnh. Đánh dấu vùng có thể đục bằng /* HOLE:start */ ... /* HOLE:end */ nếu muốn tự kiểm soát." : "Dán starter code hoặc mô tả cây thư mục."}
+                        placeholder={assignmentFlow.starterPlaceholder}
                       />
                     </div>
                   )}
                   <div className="form-group">
-                    <label className="form-label">
-                      {newType === "QUIZ_CODE" ? "Đáp án / giải thích chuẩn" : "Lời giải tham chiếu"}
-                    </label>
+                    <label className="form-label">{assignmentFlow.solutionLabel}</label>
                     <textarea
                       className="form-control testcase-textarea"
                       value={referenceSolution}
                       onChange={(e) => setReferenceSolution(e.target.value)}
                       rows={6}
-                      placeholder="Dùng để sinh/đối chiếu testcase và làm chuẩn chấm nội bộ."
+                      placeholder={assignmentFlow.solutionPlaceholder}
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">{typeConfigLabel(newType)}</label>
+                    <label className="form-label">{assignmentFlow.configLabel}</label>
                     <textarea
                       className="form-control"
                       value={typeConfig}
                       onChange={(e) => setTypeConfig(e.target.value)}
                       rows={3}
-                      placeholder={typeConfigPlaceholder(newType)}
+                      placeholder={assignmentFlow.configPlaceholder}
                     />
+                  </div>
+                </div>
+                <div className="builder-step-heading">
+                  <span>4</span>
+                  <div>
+                    <strong>Chấm và kiểm thử</strong>
+                    <p>{assignmentFlow.requireTestcases ? "Dạng bài này cần testcase mẫu để chấm tự động và sinh thêm biến thể." : "Dạng bài này không bắt buộc testcase; chỉ nhập khi cần kiểm chứng tự động."}</p>
                   </div>
                 </div>
                 <div className="assignment-testcase-builder">
                   <div className="panel-title-row">
                     <div>
-                      <h4>Testcase mẫu và bộ sinh testcase</h4>
-                      <p>Import file mẫu hoặc dán mỗi testcase trên một dòng. Preview bên dưới cho thấy cách hệ thống sinh biến thể tương tự.</p>
+                      <h4>{assignmentFlow.testcaseTitle}</h4>
+                      <p>{assignmentFlow.testcaseHint}</p>
                     </div>
-                    <span>{seedCount} seed + {generatedCount} generated</span>
+                    <span>{assignmentFlow.requireTestcases ? `${seedCount} seed + ${generatedCount} generated` : "Tùy chọn"}</span>
                   </div>
                   <div className="testcase-builder-grid">
                     <div>
+                      {assignmentFlow.requireTestcases && (
+                      <>
                       <div className="form-group">
                         <label className="form-label">Chiến lược sinh</label>
                         <select
@@ -1492,29 +2330,63 @@ export default function TeacherDashboard() {
                           onChange={(e) => setGeneratedCount(Number(e.target.value))}
                         />
                       </div>
+                      </>
+                      )}
                       <div className="form-group">
                         <label className="form-label">Import testcase mẫu</label>
                         <input type="file" accept=".txt,.csv,.json" ref={testcaseInputRef} onChange={handleTestcaseFileChange} />
                       </div>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Testcase mẫu</label>
-                      <textarea
-                        className="form-control testcase-textarea"
-                        value={sampleTestcases}
-                        onChange={(e) => setSampleTestcases(e.target.value)}
-                        rows={8}
-                      />
+                      <div className="testcase-pair-header">
+                        <label className="form-label">Bảng testcase mẫu</label>
+                        <button type="button" className="btn btn-secondary" onClick={addTestcasePair}>
+                          Thêm testcase
+                        </button>
+                      </div>
+                      <div className="testcase-pair-table">
+                        <div className="testcase-pair-row testcase-pair-heading">
+                          <span>Input</span>
+                          <span>Expected output</span>
+                          <span></span>
+                        </div>
+                        {testcasePairs.map((pair, index) => (
+                          <div className="testcase-pair-row" key={`testcase-${index}`}>
+                            <textarea
+                              className="form-control"
+                              value={pair.input}
+                              onChange={(e) => updateTestcasePair(index, "input", e.target.value)}
+                              rows={2}
+                              placeholder="Ví dụ: 17"
+                            />
+                            <textarea
+                              className="form-control"
+                              value={pair.expected}
+                              onChange={(e) => updateTestcasePair(index, "expected", e.target.value)}
+                              rows={2}
+                              placeholder="Ví dụ: YES"
+                            />
+                            <button type="button" className="btn btn-secondary" onClick={() => removeTestcasePair(index)}>
+                              Xóa
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="field-hint">Mỗi dòng là một testcase hoàn chỉnh. Input và expected output được tách riêng để tránh nhập nhầm.</p>
                     </div>
                   </div>
+                  {assignmentFlow.requireTestcases && (
                   <div className="generated-preview">
                     <div className="panel-title-row">
                       <strong>Preview testcase sinh thêm</strong>
                       <span>{strategyLabel(generationStrategy)}</span>
                     </div>
-                    <pre>{generatedPreview.join("\n") || "Thêm testcase mẫu để xem preview."}</pre>
+                    <pre>{generatedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n") || "Thêm testcase mẫu để xem preview."}</pre>
                   </div>
+                  )}
                 </div>
+                </>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>

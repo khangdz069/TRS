@@ -8,6 +8,7 @@ public record GraderPayload(
         @JsonProperty("submission_id") String submissionId,
         @JsonProperty("assignment_id") String assignmentId,
         @JsonProperty("student_id") String studentId,
-        List<GraderPayloadFile> files
+        List<GraderPayloadFile> files,
+        @JsonProperty("custom_testcases") List<GraderPayloadTestcase> customTestcases
 ) {
 }

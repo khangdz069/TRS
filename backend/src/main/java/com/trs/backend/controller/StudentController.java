@@ -19,6 +19,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -57,6 +58,80 @@ public class StudentController {
         this.studentRepository = studentRepository;
         this.studentOnAssignmentRepository = studentOnAssignmentRepository;
         this.authService = authService;
+    }
+
+    @PostMapping
+    @Transactional
+    public ResponseEntity<?> addStudent(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestBody Map<String, String> body) {
+        CurrentUser currentUser = authService.fromAuthorizationHeader(authorization).orElse(null);
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Missing or invalid authorization token"));
+        }
+        if (!authService.hasRole(currentUser, "TEACHER")) {
+            return ResponseEntity.status(403).body(Map.of("error", "Permission denied"));
+        }
+
+        String assignmentIdValue = body.getOrDefault("assignment_id", "");
+        String mssv = cleanMssv(body.get("mssv"));
+        String email = body.getOrDefault("email", "").trim();
+        String name = body.getOrDefault("name", "").trim();
+        String classSection = body.getOrDefault("class_section", "").trim();
+
+        if (assignmentIdValue.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "assignment_id is required"));
+        }
+        if (mssv == null || mssv.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "MSSV is required"));
+        }
+        if (email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email is required"));
+        }
+        if (!email.contains("@")) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email is invalid"));
+        }
+        if (name.isBlank()) {
+            name = email.substring(0, email.indexOf('@'));
+        }
+        if (classSection.isBlank()) {
+            classSection = "Default";
+        }
+
+        UUID assignmentId;
+        try {
+            assignmentId = UUID.fromString(assignmentIdValue);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(Map.of("error", "Assignment not found"));
+        }
+
+        Assignment assignment = assignmentRepository.findById(assignmentId).orElse(null);
+        if (assignment == null) {
+            return ResponseEntity.status(404).body(Map.of("error", "Assignment not found"));
+        }
+
+        Student student = ensureStudent(mssv, email, name);
+        StudentOnAssignment registration = studentOnAssignmentRepository
+                .findByStudentIdAndAssignmentId(student.getId(), assignment.getId())
+                .orElse(null);
+        boolean created = registration == null;
+        if (registration == null) {
+            registration = new StudentOnAssignment();
+            registration.setStudent(student);
+            registration.setAssignment(assignment);
+        }
+        registration.setClassSection(classSection);
+        registration.setActive(true);
+        studentOnAssignmentRepository.save(registration);
+
+        return ResponseEntity.ok(Map.of(
+                "message", created
+                        ? "Student registered to " + classSection
+                        : "Student already existed and was updated in " + classSection,
+                "student_id", student.getId().toString(),
+                "class_section", classSection,
+                "created", created
+        ));
     }
 
     @PostMapping("/import")

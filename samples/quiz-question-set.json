@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "mode": "QUESTION_SET",
+  "questions": [
+    {
+      "id": "binary-search-complexity",
+      "title": "Độ phức tạp binary search",
+      "prompt": "Độ phức tạp thời gian trung bình của binary search trên mảng đã sắp xếp là gì?",
+      "points": 1,
+      "kind": "SINGLE_CHOICE",
+      "starterCode": "",
+      "referenceAnswer": "",
+      "options": ["O(1)", "O(log n)", "O(n)", "O(n log n)"],
+      "correctOption": 1,
+      "testcases": []
+    },
+    {
+      "id": "array-index",
+      "title": "Chỉ số mảng C++",
+      "prompt": "Trong C++, phần tử đầu tiên của mảng a có chỉ số nào?",
+      "points": 1,
+      "kind": "SINGLE_CHOICE",
+      "starterCode": "",
+      "referenceAnswer": "",
+      "options": ["0", "1", "-1", "n"],
+      "correctOption": 0,
+      "testcases": []
+    }
+  ]
+}
