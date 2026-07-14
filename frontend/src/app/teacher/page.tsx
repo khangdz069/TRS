@@ -95,9 +95,11 @@ const ASSIGNMENT_WIZARD_STEPS: Array<{
 }> = [
   { value: "SETUP", title: "Thiết lập", helper: "Thông tin bài" },
   { value: "CONTENT", title: "Nội dung", helper: "Câu hỏi và đề" },
-  { value: "TESTCASES", title: "Chấm điểm", helper: "Testcase" },
+  { value: "TESTCASES", title: "Testcase", helper: "Kiểm thử" },
   { value: "REVIEW", title: "Xem lại", helper: "Kiểm tra cuối" },
 ];
+
+const SHOW_ASSIGNMENT_IMPORT_FIELD = false;
 
 const DEFAULT_TESTCASE_PAIRS: TestcasePair[] = [
   { input: "1", expected: "NO", visibility: "SAMPLE" },
@@ -2270,12 +2272,6 @@ export default function TeacherDashboard() {
 
                 {assignmentWizardStep === "SETUP" && (
                 <>
-                <div className="builder-step-heading">
-                  <div>
-                    <strong>Thiết lập bài tập</strong>
-                    <p>Đặt tên, thời gian và mô tả ngắn để sinh viên biết đây là bài gì.</p>
-                  </div>
-                </div>
                 <div className="form-group">
                   <label className="form-label">Tên bài tập lớn</label>
                   <input
@@ -2329,12 +2325,6 @@ export default function TeacherDashboard() {
                 )}
                 {assignmentWizardStep === "CONTENT" && (
                 <>
-                <div className="builder-step-heading compact">
-                  <div>
-                    <strong>Dạng bài</strong>
-                    <p>Dạng bài quyết định các trường bắt buộc và cách hệ thống hiểu file import.</p>
-                  </div>
-                </div>
                 <div className="form-group assignment-type-section">
                   <label className="form-label">Dạng bài</label>
                   <div className="assignment-type-grid">
@@ -2386,47 +2376,42 @@ export default function TeacherDashboard() {
                     ))}
                   </div>
                 </div>
-                <div className="builder-step-heading">
-                  <div>
-                    <strong>Nội dung bài</strong>
-                    <p>Theo dạng {assignmentFlow.label}. {assignmentFlow.importHint}</p>
+                {SHOW_ASSIGNMENT_IMPORT_FIELD && (
+                  <div className="form-group import-field">
+                    <label className="form-label">Import file bài tập</label>
+                    <input
+                      type="file"
+                      ref={assignmentFileInputRef}
+                      accept=".txt,.md,.docx,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.json,.zip"
+                      onChange={handleAssignmentFileChange}
+                    />
+                    <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem" }}>
+                      Bài thường/quiz: file vào đề bài. Đục lỗ/sửa lỗi/project: file vào template hoặc starter code.
+                    </p>
                   </div>
-                </div>
-                <div className="form-group import-field">
-                  <label className="form-label">Import file bài tập</label>
-                  <input
-                    type="file"
-                    ref={assignmentFileInputRef}
-                    accept=".txt,.md,.docx,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.json,.zip"
-                    onChange={handleAssignmentFileChange}
-                  />
-                  <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem" }}>
-                    Bài thường/quiz: file vào đề bài. Đục lỗ/sửa lỗi/project: file vào template hoặc starter code.
-                  </p>
-                </div>
+                )}
                 </>
                 )}
                 {isQuestionSetAssignment && (assignmentWizardStep === "CONTENT" || assignmentWizardStep === "TESTCASES") && (
-                  <div className="question-builder-panel">
-                    <div className="panel-title-row">
-                      <div>
-                        <h4>
-                          {assignmentWizardStep === "TESTCASES"
-                            ? "Testcase theo từng câu"
-                            : (newType === "QUIZ_CODE" ? "Danh sách câu trắc nghiệm" : "Danh sách câu hỏi lập trình")}
-                        </h4>
-                        <p>
-                          {assignmentWizardStep === "TESTCASES"
-                            ? "Mỗi câu giữ testcase hiển thị và testcase chấm ẩn trong một vùng riêng."
-                            : (newType === "QUIZ_CODE" ? "Mỗi câu có 4 đáp án, chọn một đáp án đúng." : "Mỗi câu có đề riêng, điểm riêng và lời giải chuẩn riêng.")}
-                        </p>
+                  <div className={`question-builder-panel ${assignmentWizardStep === "TESTCASES" ? "question-testcase-detail-panel" : ""}`}>
+                    {assignmentWizardStep === "CONTENT" ? (
+                      <div className="question-list-heading-row">
+                        <div>
+                          <label className="form-label">{newType === "QUIZ_CODE" ? "Danh sách câu trắc nghiệm" : "Danh sách câu hỏi lập trình"}</label>
+                          <p className="field-hint">{newType === "QUIZ_CODE" ? "Mỗi câu có 4 đáp án, chọn một đáp án đúng." : "Mỗi câu có đề riêng, điểm riêng và lời giải chuẩn riêng."}</p>
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
+                          Thêm câu hỏi
+                        </button>
                       </div>
-                      {assignmentWizardStep === "CONTENT" && (
-                      <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
-                        Thêm câu hỏi
-                      </button>
-                      )}
-                    </div>
+                    ) : (
+                      <div className="panel-title-row">
+                        <div>
+                          <h4>Testcase theo từng câu</h4>
+                          <p>Mỗi câu giữ testcase hiển thị và testcase chấm ẩn trong một vùng riêng.</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="question-builder-list" ref={questionListRef}>
                       {questionItems.map((question, questionIndex) => (
                         <div className="question-builder-card" key={question.id} data-question-id={question.id}>
@@ -2568,7 +2553,7 @@ export default function TeacherDashboard() {
                     </div>
                   </div>
                 )}
-                {isQuestionSetAssignment && (assignmentWizardStep === "TESTCASES" || assignmentWizardStep === "REVIEW") && (
+                {isQuestionSetAssignment && assignmentWizardStep === "TESTCASES" && (
                   <div className="assignment-testcase-builder question-testcase-summary-panel">
                     <div className="panel-title-row">
                       <div>
@@ -2619,59 +2604,36 @@ export default function TeacherDashboard() {
                         <div className="question-testcase-preview-grid">
                           <div>
                             <div className="compact-section-heading">
-                              <h4>Seed từ câu hỏi</h4>
-                              <span className="panel-count-pill">{questionTestcases.length} TC</span>
+                              <div>
+                                <h4>Testcase đã nhập</h4>
+                                <p>Dữ liệu hệ thống dùng để chấm và làm mẫu sinh thêm.</p>
+                              </div>
+                              <span className="panel-count-pill">{questionTestcases.length} testcase</span>
                             </div>
-                            <pre>{questionTestcases.slice(0, 8).map((pair, index) => `Câu ${pair.question || "-"} / TC ${index + 1}\nTest: ${pair.input}\nExpected: ${pair.expected}`).join("\n\n") || "Chưa có testcase. Thêm Test/Expected trong từng câu hỏi."}</pre>
+                            {questionTestcases.length > 0 ? (
+                              <pre>{questionTestcases.slice(0, 8).map((pair, index) => `Câu ${pair.question || "-"} / Testcase ${index + 1}\nInput: ${pair.input || "Không có input"}\nExpected: ${pair.expected || "Chưa có expected"}`).join("\n\n")}</pre>
+                            ) : (
+                              <div className="testcase-preview-empty">Chưa có testcase nào. Hãy thêm Input và Expected trong từng câu hỏi bên dưới.</div>
+                            )}
                           </div>
                           <div>
                             <div className="compact-section-heading">
-                              <h4>Gợi ý sinh thêm</h4>
+                              <div>
+                                <h4>Testcase dự kiến sinh thêm</h4>
+                                <p>Dựa trên testcase đã nhập và chiến lược đang chọn.</p>
+                              </div>
                               <span>{strategyLabel(generationStrategy)}</span>
                             </div>
-                            <pre>{questionGeneratedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n") || "Thêm testcase seed để xem preview."}</pre>
+                            {questionGeneratedPreview.length > 0 ? (
+                              <pre>{questionGeneratedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n")}</pre>
+                            ) : (
+                              <div className="testcase-preview-empty">Chưa thể sinh preview. Cần ít nhất một testcase đã nhập.</div>
+                            )}
                           </div>
                         </div>
                       </>
                     )}
 
-                    <div className="student-preview-panel">
-                      <div className="compact-section-heading">
-                        <h4>Preview phía sinh viên</h4>
-                        <span>{questionSampleCount} testcase hiển thị</span>
-                      </div>
-                      <div className="student-preview-list">
-                        {activeQuestions.slice(0, 3).map((question, index) => {
-                          const samplePairs = question.testcases.filter(isSampleTestcase).filter((pair) => pair.input.trim() || pair.expected.trim());
-                          return (
-                            <div className="student-preview-question" key={`preview-${question.id}`}>
-                              <div>
-                                <span>Câu {index + 1}</span>
-                                <strong>{question.title || `Câu ${index + 1}`}</strong>
-                              </div>
-                              <p>{question.prompt || "Chưa nhập nội dung câu hỏi."}</p>
-                              {question.kind === "SINGLE_CHOICE" ? (
-                                <ul>
-                                  {question.options.map((option, optionIndex) => (
-                                    <li key={`preview-option-${question.id}-${optionIndex}`}>
-                                      {String.fromCharCode(65 + optionIndex)}. {option || `Đáp án ${String.fromCharCode(65 + optionIndex)}`}
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <div className="student-preview-testcases">
-                                  {samplePairs.length > 0
-                                    ? samplePairs.slice(0, 2).map((pair, pairIndex) => (
-                                        <code key={`preview-sample-${question.id}-${pairIndex}`}>{pair.input || "Không có input"} → {pair.expected || "Chưa có expected"}</code>
-                                      ))
-                                    : <em>Chưa có testcase hiển thị cho sinh viên.</em>}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
                   </div>
                 )}
                 {!isQuestionSetAssignment && assignmentWizardStep === "CONTENT" && (
@@ -2853,6 +2815,45 @@ export default function TeacherDashboard() {
                         </strong>
                         <p>{generatedCount} testcase sinh thêm</p>
                       </section>
+                    </div>
+                  </div>
+                )}
+                {isQuestionSetAssignment && assignmentWizardStep === "REVIEW" && (
+                  <div className="student-preview-panel review-student-preview-panel">
+                    <div className="compact-section-heading">
+                      <h4>Preview phía sinh viên</h4>
+                      <span>{newType === "QUIZ_CODE" ? `${questionItems.length} câu` : `${questionSampleCount} testcase hiển thị`}</span>
+                    </div>
+                    <div className="student-preview-list">
+                      {activeQuestions.slice(0, 3).map((question, index) => {
+                        const samplePairs = question.testcases.filter(isSampleTestcase).filter((pair) => pair.input.trim() || pair.expected.trim());
+                        return (
+                          <div className="student-preview-question" key={`preview-${question.id}`}>
+                            <div>
+                              <span>Câu {index + 1}</span>
+                              <strong>{question.title || `Câu ${index + 1}`}</strong>
+                            </div>
+                            <p>{question.prompt || "Chưa nhập nội dung câu hỏi."}</p>
+                            {question.kind === "SINGLE_CHOICE" ? (
+                              <ul>
+                                {question.options.map((option, optionIndex) => (
+                                  <li key={`preview-option-${question.id}-${optionIndex}`}>
+                                    {String.fromCharCode(65 + optionIndex)}. {option || `Đáp án ${String.fromCharCode(65 + optionIndex)}`}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="student-preview-testcases">
+                                {samplePairs.length > 0
+                                  ? samplePairs.slice(0, 2).map((pair, pairIndex) => (
+                                      <code key={`preview-sample-${question.id}-${pairIndex}`}>{pair.input || "Không có input"} → {pair.expected || "Chưa có expected"}</code>
+                                    ))
+                                  : <em>Chưa có testcase hiển thị cho sinh viên.</em>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
