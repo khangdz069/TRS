@@ -198,7 +198,10 @@ public class AssignmentController {
             assignments = student == null ? List.of() : assignmentRepository.findActiveByStudentId(student.getId());
         }
 
-        return ResponseEntity.ok(assignments.stream().map(mapper::assignment).toList());
+        boolean studentView = "STUDENT".equals(currentUser.account().getRole());
+        return ResponseEntity.ok(assignments.stream()
+                .map(assignment -> studentView ? mapper.assignmentForStudent(assignment) : mapper.assignment(assignment))
+                .toList());
     }
 
     @GetMapping("/{id}")
@@ -231,7 +234,11 @@ public class AssignmentController {
             }
         }
 
-        Map<String, Object> response = new LinkedHashMap<>(mapper.assignment(assignment));
+        Map<String, Object> response = new LinkedHashMap<>(
+                "STUDENT".equals(currentUser.account().getRole())
+                        ? mapper.assignmentForStudent(assignment)
+                        : mapper.assignment(assignment)
+        );
         if ("TEACHER".equals(currentUser.account().getRole())) {
             response.put("student_list", studentRepository.findActiveByAssignmentId(assignment.getId())
                     .stream()

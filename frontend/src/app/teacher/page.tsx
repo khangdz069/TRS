@@ -61,7 +61,12 @@ type TeacherTab = "assignments" | "import" | "teachers" | "students" | "analytic
 
 type AssignmentType = "STANDARD" | "FILL_BLANK" | "DEBUGGING" | "PROJECT" | "QUIZ_CODE";
 type GenerationStrategy = "MUTATION" | "BOUNDARY" | "RANDOMIZED" | "PAIRWISE";
-type TestcasePair = { input: string; expected: string };
+type TestcaseVisibility = "SAMPLE" | "HIDDEN";
+type TestcasePair = {
+  input: string;
+  expected: string;
+  visibility: TestcaseVisibility;
+};
 type QuestionKind = "CODE" | "TEXT" | "SINGLE_CHOICE";
 type AssignmentQuestion = {
   id: string;
@@ -83,16 +88,126 @@ type StructuredAssignmentConfig = {
 };
 
 const DEFAULT_TESTCASE_PAIRS: TestcasePair[] = [
-  { input: "1", expected: "NO" },
-  { input: "2", expected: "YES" },
-  { input: "9", expected: "NO" },
-  { input: "17", expected: "YES" },
-  { input: "100", expected: "NO" },
+  { input: "1", expected: "NO", visibility: "SAMPLE" },
+  { input: "2", expected: "YES", visibility: "SAMPLE" },
+  { input: "9", expected: "NO", visibility: "HIDDEN" },
+  { input: "17", expected: "YES", visibility: "HIDDEN" },
+  { input: "100", expected: "NO", visibility: "HIDDEN" },
 ];
+
+const TESTCASE_GROUPS: Array<{
+  visibility: TestcaseVisibility;
+  tone: "sample" | "hidden";
+  title: string;
+  description: string;
+  addLabel: string;
+  emptyLabel: string;
+  moveLabel: string;
+}> = [
+  {
+    visibility: "SAMPLE",
+    tone: "sample",
+    title: "Testcase hiển thị",
+    description: "Sinh viên thấy để tự kiểm tra trước khi nộp.",
+    addLabel: "Thêm",
+    emptyLabel: "Chưa có testcase hiển thị.",
+    moveLabel: "Ẩn testcase",
+  },
+  {
+    visibility: "HIDDEN",
+    tone: "hidden",
+    title: "Testcase chấm ẩn",
+    description: "Chỉ dùng khi chấm điểm, sinh viên không thấy dữ liệu này.",
+    addLabel: "Thêm",
+    emptyLabel: "Chưa có testcase chấm ẩn.",
+    moveLabel: "Cho hiển thị",
+  },
+];
+
+const createTestcasePair = (
+  visibility: TestcaseVisibility = "SAMPLE",
+  input = "",
+  expected = "",
+): TestcasePair => ({
+  input,
+  expected,
+  visibility,
+});
+
+const normalizeTestcasePair = (
+  item: Partial<TestcasePair> | undefined,
+  fallbackVisibility: TestcaseVisibility = "SAMPLE",
+): TestcasePair => {
+  const visibility = item?.visibility === "HIDDEN" ? "HIDDEN" : fallbackVisibility;
+  return {
+    input: String(item?.input || ""),
+    expected: String(item?.expected || ""),
+    visibility,
+  };
+};
+
+const isSampleTestcase = (pair: TestcasePair) => pair.visibility !== "HIDDEN";
+const isTestcaseInGroup = (pair: TestcasePair, visibility: TestcaseVisibility) =>
+  visibility === "SAMPLE" ? isSampleTestcase(pair) : !isSampleTestcase(pair);
+const oppositeTestcaseVisibility = (visibility: TestcaseVisibility): TestcaseVisibility =>
+  visibility === "SAMPLE" ? "HIDDEN" : "SAMPLE";
+
+const padDatePart = (value: number) => String(value).padStart(2, "0");
+
+const isValidDateParts = (day: number, month: number, year: number) => {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
+
+const formatDateOnly = (value?: string | null) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  }
+
+  const date = new Date(trimmed);
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()}`;
+};
+
+const formatDateTime = (value?: string | null) => {
+  const date = new Date(String(value || ""));
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+};
+
+const parseDisplayDate = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    return isValidDateParts(day, month, year) ? `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}` : null;
+  }
+
+  const match = trimmed.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (!isValidDateParts(day, month, year)) return null;
+  return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
+};
 
 const createQuestion = (type: AssignmentType, index = 1): AssignmentQuestion => ({
   id: `${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
-  title: `Câu ${index}`,
+  title: "",
   prompt: type === "QUIZ_CODE"
     ? "Chọn đáp án đúng nhất."
     : "Viết lời giải cho yêu cầu dưới đây.",
@@ -102,14 +217,14 @@ const createQuestion = (type: AssignmentType, index = 1): AssignmentQuestion => 
   referenceAnswer: "",
   options: ["", "", "", ""],
   correctOption: 0,
-  testcases: type === "QUIZ_CODE" ? [] : [{ input: "", expected: "" }],
+  testcases: type === "QUIZ_CODE" ? [] : [createTestcasePair("SAMPLE"), createTestcasePair("HIDDEN")],
 });
 
 const normalizeQuestion = (item: Partial<AssignmentQuestion>, index: number, type: AssignmentType): AssignmentQuestion => ({
   ...createQuestion(type, index + 1),
   ...item,
   id: String(item.id || `q-${index + 1}`),
-  title: String(item.title || `Câu ${index + 1}`),
+  title: String(item.title || ""),
   prompt: String(item.prompt || ""),
   points: Number(item.points) || 1,
   kind: (item.kind === "TEXT" || item.kind === "SINGLE_CHOICE" || item.kind === "CODE")
@@ -118,10 +233,7 @@ const normalizeQuestion = (item: Partial<AssignmentQuestion>, index: number, typ
   options: Array.from({ length: 4 }, (_, optionIndex) => String(item.options?.[optionIndex] || "")),
   correctOption: Math.min(3, Math.max(0, Number(item.correctOption) || 0)),
   testcases: Array.isArray(item.testcases)
-    ? item.testcases.map((pair) => ({
-        input: String(pair?.input || ""),
-        expected: String(pair?.expected || ""),
-      }))
+    ? item.testcases.map((pair) => normalizeTestcasePair(pair))
     : [],
 });
 
@@ -161,7 +273,7 @@ const splitQuestionDocument = (content: string, type: AssignmentType): Assignmen
     const question = createQuestion(type, index + 1);
     const lines = chunk.split("\n").map((line) => line.trimEnd());
     const firstLine = lines[0] || `Câu ${index + 1}`;
-    question.title = firstLine.replace(/^#{1,3}\s*/, "").replace(/^(Câu|Cau|C\?u|Question)\s+\d+[\).:\-]?\s*/i, "").trim() || `Câu ${index + 1}`;
+    question.title = firstLine.replace(/^#{1,3}\s*/, "").replace(/^(Câu|Cau|C\?u|Question)\s+\d+[\).:\-]?\s*/i, "").trim();
     question.kind = type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE";
     question.options = ["", "", "", ""];
     question.testcases = [];
@@ -173,7 +285,7 @@ const splitQuestionDocument = (content: string, type: AssignmentType): Assignmen
 
     const flushTestcase = () => {
       if (pendingTest.trim() || pendingExpected.trim()) {
-        question.testcases.push({ input: pendingTest.trim(), expected: pendingExpected.trim() });
+        question.testcases.push(createTestcasePair(question.testcases.length === 0 ? "SAMPLE" : "HIDDEN", pendingTest.trim(), pendingExpected.trim()));
       }
       pendingTest = "";
       pendingExpected = "";
@@ -245,7 +357,7 @@ const splitQuestionDocument = (content: string, type: AssignmentType): Assignmen
     if (question.kind === "SINGLE_CHOICE") {
       question.testcases = [];
     } else if (question.testcases.length === 0) {
-      question.testcases = [{ input: "", expected: "" }];
+      question.testcases = [createTestcasePair("SAMPLE"), createTestcasePair("HIDDEN")];
     }
     return question;
   });
@@ -272,7 +384,7 @@ const questionSetReference = (questions: AssignmentQuestion[]) =>
     const answer = question.kind === "SINGLE_CHOICE"
       ? `${String.fromCharCode(65 + question.correctOption)}. ${question.options[question.correctOption] || ""}`
       : question.referenceAnswer;
-    return `${index + 1}. ${question.title}: ${answer || "Chưa nhập đáp án chuẩn"}`;
+    return `${index + 1}. ${question.title || `Câu ${index + 1}`}: ${answer || "Chưa nhập đáp án chuẩn"}`;
   }).join("\n");
 
 const questionSetTestcases = (questions: AssignmentQuestion[]) =>
@@ -284,6 +396,7 @@ const questionSetTestcases = (questions: AssignmentQuestion[]) =>
         expected: pair.expected,
         question: questionIndex + 1,
         testcase: testcaseIndex + 1,
+        visibility: pair.visibility,
       }))
   );
 
@@ -331,9 +444,10 @@ const parseTestcasePairs = (value?: string): TestcasePair[] => {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) {
       return parsed
-        .map((item) => ({
+        .map((item) => normalizeTestcasePair({
           input: String(item?.input ?? "").trim(),
           expected: String(item?.expected ?? item?.output ?? "").trim(),
+          visibility: item?.visibility === "HIDDEN" ? "HIDDEN" : "SAMPLE",
         }))
         .filter((item) => item.input || item.expected);
     }
@@ -349,6 +463,7 @@ const parseTestcasePairs = (value?: string): TestcasePair[] => {
       return {
         input: (parts[0] || "").trim(),
         expected: (parts.slice(1).join(" ").trim()),
+        visibility: "SAMPLE",
       };
     });
 };
@@ -569,12 +684,16 @@ export default function TeacherDashboard() {
   const [newType, setNewType] = useState<AssignmentType>("STANDARD");
   const [newStart, setNewStart] = useState("");
   const [newEnd, setNewEnd] = useState("");
+  const [newStartDisplay, setNewStartDisplay] = useState("");
+  const [newEndDisplay, setNewEndDisplay] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [problemStatement, setProblemStatement] = useState("");
   const [starterCode, setStarterCode] = useState("");
   const [referenceSolution, setReferenceSolution] = useState("");
   const [typeConfig, setTypeConfig] = useState("");
   const [questionItems, setQuestionItems] = useState<AssignmentQuestion[]>([createQuestion("STANDARD", 1)]);
+  const questionListRef = useRef<HTMLDivElement | null>(null);
+  const pendingQuestionFocusIdRef = useRef<string | null>(null);
   const [languages, setLanguages] = useState<string[]>(["cpp"]);
   const [generationStrategy, setGenerationStrategy] = useState<GenerationStrategy>("MUTATION");
   const [testcasePairs, setTestcasePairs] = useState<TestcasePair[]>(DEFAULT_TESTCASE_PAIRS);
@@ -632,7 +751,7 @@ export default function TeacherDashboard() {
       return { dateLabel: "Không giới hạn", helper: "Mở" };
     }
 
-    const dateLabel = new Date(assignment.end_date).toLocaleDateString("vi-VN");
+    const dateLabel = formatDateOnly(assignment.end_date);
     const diffMs = endTime - assignmentStatusNow;
     if (diffMs < 0) {
       return { dateLabel, helper: "Đóng" };
@@ -647,7 +766,30 @@ export default function TeacherDashboard() {
   const isQuestionSetAssignment = newType === "STANDARD" || newType === "QUIZ_CODE";
   const activeQuestions = isQuestionSetAssignment ? questionItems : [];
   const questionTestcases = questionSetTestcases(activeQuestions);
+  const questionSampleCount = activeQuestions.reduce(
+    (sum, question) => sum + question.testcases.filter((pair) => isSampleTestcase(pair) && (pair.input.trim() || pair.expected.trim())).length,
+    0,
+  );
+  const questionHiddenCount = activeQuestions.reduce(
+    (sum, question) => sum + question.testcases.filter((pair) => !isSampleTestcase(pair) && (pair.input.trim() || pair.expected.trim())).length,
+    0,
+  );
   const questionGeneratedPreview = generateTestcases(questionTestcases, Math.min(generatedCount, 8), generationStrategy);
+
+  useEffect(() => {
+    const focusId = pendingQuestionFocusIdRef.current;
+    if (!focusId || !isQuestionSetAssignment) return;
+
+    pendingQuestionFocusIdRef.current = null;
+    window.requestAnimationFrame(() => {
+      const cards = Array.from(questionListRef.current?.querySelectorAll<HTMLElement>("[data-question-id]") || []);
+      const targetCard = cards.find((card) => card.dataset.questionId === focusId) || cards[cards.length - 1];
+      targetCard?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        targetCard?.querySelector<HTMLInputElement | HTMLTextAreaElement>(".form-control")?.focus();
+      }, 180);
+    });
+  }, [questionItems.length, isQuestionSetAssignment]);
 
   useEffect(() => {
     setAssignmentStatusNow(Date.now());
@@ -753,6 +895,8 @@ export default function TeacherDashboard() {
     setNewType("STANDARD");
     setNewStart("");
     setNewEnd("");
+    setNewStartDisplay("");
+    setNewEndDisplay("");
     setNewDesc("");
     setProblemStatement("");
     setStarterCode("");
@@ -776,8 +920,12 @@ export default function TeacherDashboard() {
     setEditingAssignmentId(assignment.id);
     setNewTitle(assignment.name || "");
     setNewType(assignment.assignment_type || "STANDARD");
-    setNewStart((assignment.start_date || "").slice(0, 10));
-    setNewEnd((assignment.end_date || "").slice(0, 10));
+    const startDate = (assignment.start_date || "").slice(0, 10);
+    const endDate = (assignment.end_date || "").slice(0, 10);
+    setNewStart(startDate);
+    setNewEnd(endDate);
+    setNewStartDisplay(formatDateOnly(startDate));
+    setNewEndDisplay(formatDateOnly(endDate));
     setNewDesc(assignment.description || "");
     setProblemStatement(assignment.problem_statement || "");
     setStarterCode(assignment.starter_code || "");
@@ -791,7 +939,7 @@ export default function TeacherDashboard() {
     setIsModalOpen(true);
   };
 
-  const assignmentPayload = () => ({
+  const assignmentPayload = (startDate = newStart, endDate = newEnd) => ({
     name: newTitle,
     description: newDesc,
     assignment_type: newType,
@@ -804,14 +952,26 @@ export default function TeacherDashboard() {
     starter_code: isQuestionSetAssignment ? activeQuestions.map((question) => question.starterCode).filter(Boolean).join("\n\n") : starterCode,
     reference_solution: isQuestionSetAssignment ? questionSetReference(activeQuestions) : referenceSolution,
     type_config: isQuestionSetAssignment ? serializeQuestionConfig(activeQuestions) : typeConfig,
-    start_date: newStart,
-    end_date: newEnd,
+    start_date: startDate,
+    end_date: endDate,
   });
 
   const handleAddAssignment = async (e: FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem("trs_token");
-    if (!token || !newTitle || !newStart || !newEnd) return;
+    if (!token || !newTitle) return;
+
+    const parsedStart = parseDisplayDate(newStartDisplay);
+    const parsedEnd = parseDisplayDate(newEndDisplay);
+    if (!parsedStart || !parsedEnd) {
+      alert("Vui lòng nhập ngày theo định dạng dd/mm/yyyy.");
+      return;
+    }
+
+    setNewStart(parsedStart);
+    setNewEnd(parsedEnd);
+    setNewStartDisplay(formatDateOnly(parsedStart));
+    setNewEndDisplay(formatDateOnly(parsedEnd));
 
     const flow = getAssignmentFlow(newType);
     if (isQuestionSetAssignment && !questionItems.some((question) => question.prompt.trim())) {
@@ -850,7 +1010,7 @@ export default function TeacherDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(assignmentPayload()),
+        body: JSON.stringify(assignmentPayload(parsedStart, parsedEnd)),
       });
 
       if (!response.ok) {
@@ -907,14 +1067,14 @@ export default function TeacherDashboard() {
     setTestcasePairs(parseTestcasePairs(await file.text()));
   };
 
-  const updateTestcasePair = (index: number, field: keyof TestcasePair, value: string) => {
+  const updateTestcasePair = <K extends keyof TestcasePair>(index: number, field: K, value: TestcasePair[K]) => {
     setTestcasePairs((current) => current.map((pair, pairIndex) =>
       pairIndex === index ? { ...pair, [field]: value } : pair
     ));
   };
 
-  const addTestcasePair = () => {
-    setTestcasePairs((current) => [...current, { input: "", expected: "" }]);
+  const addTestcasePair = (visibility: TestcaseVisibility = "HIDDEN") => {
+    setTestcasePairs((current) => [...current, createTestcasePair(visibility)]);
   };
 
   const removeTestcasePair = (index: number) => {
@@ -922,7 +1082,11 @@ export default function TeacherDashboard() {
   };
 
   const addQuestionItem = () => {
-    setQuestionItems((current) => [...current, createQuestion(newType, current.length + 1)]);
+    setQuestionItems((current) => {
+      const nextQuestion = createQuestion(newType, current.length + 1);
+      pendingQuestionFocusIdRef.current = nextQuestion.id;
+      return [...current, nextQuestion];
+    });
   };
 
   const removeQuestionItem = (index: number) => {
@@ -944,7 +1108,12 @@ export default function TeacherDashboard() {
     }));
   };
 
-  const updateQuestionTestcase = (questionIndex: number, testcaseIndex: number, field: keyof TestcasePair, value: string) => {
+  const updateQuestionTestcase = <K extends keyof TestcasePair>(
+    questionIndex: number,
+    testcaseIndex: number,
+    field: K,
+    value: TestcasePair[K],
+  ) => {
     setQuestionItems((current) => current.map((question, index) => {
       if (index !== questionIndex) return question;
       const testcases = question.testcases.map((pair, pairIndex) =>
@@ -954,10 +1123,10 @@ export default function TeacherDashboard() {
     }));
   };
 
-  const addQuestionTestcase = (questionIndex: number) => {
+  const addQuestionTestcase = (questionIndex: number, visibility: TestcaseVisibility = "HIDDEN") => {
     setQuestionItems((current) => current.map((question, index) =>
       index === questionIndex
-        ? { ...question, testcases: [...question.testcases, { input: "", expected: "" }] }
+        ? { ...question, testcases: [...question.testcases, createTestcasePair(visibility)] }
         : question
     ));
   };
@@ -1627,7 +1796,7 @@ export default function TeacherDashboard() {
                         <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "hsl(var(--color-primary))", marginTop: "0.65rem" }}>{asm.name}</h3>
                       </div>
                       <span className="mock-badge warning" style={{ fontFamily: "var(--font-mono)" }}>
-                        Hạn nộp: {asm.end_date ? new Date(asm.end_date).toLocaleDateString("vi-VN") : "Không giới hạn"}
+                    Hạn nộp: {asm.end_date ? formatDateOnly(asm.end_date) : "Không giới hạn"}
                       </span>
                     </div>
                     <p style={{ color: "hsl(var(--text-secondary))", fontSize: "0.95rem", marginBottom: "1rem" }}>{asm.description}</p>
@@ -1869,7 +2038,7 @@ export default function TeacherDashboard() {
                             <div style={{ marginBottom: "0.5rem" }}>
                               <span>{feedback.rating}/5 sao</span>
                               <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))", marginLeft: "1rem" }}>
-                                {feedback.created_at ? new Date(feedback.created_at).toLocaleString("vi-VN") : ""}
+                          {feedback.created_at ? formatDateTime(feedback.created_at) : ""}
                               </span>
                             </div>
                             <p style={{ color: "hsl(var(--text-primary))", margin: 0, fontStyle: "italic" }}>&quot;{feedback.text}&quot;</p>
@@ -1944,12 +2113,12 @@ export default function TeacherDashboard() {
                         onClick={() => {
                           setNewType(type.value);
                           if (type.value === "STANDARD" || type.value === "QUIZ_CODE") {
-                            setQuestionItems((current) => current.map((question, index) => ({
+                            setQuestionItems((current) => current.map((question) => ({
                               ...question,
                               kind: type.value === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE",
-                              title: question.title || `Câu ${index + 1}`,
+                              title: question.title,
                               options: type.value === "QUIZ_CODE" ? question.options : ["", "", "", ""],
-                              testcases: type.value === "QUIZ_CODE" ? [] : (question.testcases.length ? question.testcases : [{ input: "", expected: "" }]),
+                              testcases: type.value === "QUIZ_CODE" ? [] : (question.testcases.length ? question.testcases : [createTestcasePair("SAMPLE"), createTestcasePair("HIDDEN")]),
                             })));
                           }
                         }}
@@ -2006,20 +2175,48 @@ export default function TeacherDashboard() {
                 <div className="form-group">
                   <label className="form-label">Ngày bắt đầu</label>
                   <input
-                    type="date"
+                    type="text"
+                    inputMode="numeric"
                     className="form-control"
-                    value={newStart}
-                    onChange={(e) => setNewStart(e.target.value)}
+                    placeholder="dd/mm/yyyy"
+                    value={newStartDisplay}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewStartDisplay(value);
+                      const parsed = parseDisplayDate(value);
+                      if (parsed !== null) setNewStart(parsed);
+                    }}
+                    onBlur={() => {
+                      const parsed = parseDisplayDate(newStartDisplay);
+                      if (parsed) {
+                        setNewStart(parsed);
+                        setNewStartDisplay(formatDateOnly(parsed));
+                      }
+                    }}
                     required
                   />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Hạn nộp bài</label>
                   <input
-                    type="date"
+                    type="text"
+                    inputMode="numeric"
                     className="form-control"
-                    value={newEnd}
-                    onChange={(e) => setNewEnd(e.target.value)}
+                    placeholder="dd/mm/yyyy"
+                    value={newEndDisplay}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewEndDisplay(value);
+                      const parsed = parseDisplayDate(value);
+                      if (parsed !== null) setNewEnd(parsed);
+                    }}
+                    onBlur={() => {
+                      const parsed = parseDisplayDate(newEndDisplay);
+                      if (parsed) {
+                        setNewEnd(parsed);
+                        setNewEndDisplay(formatDateOnly(parsed));
+                      }
+                    }}
                     required
                   />
                 </div>
@@ -2044,23 +2241,29 @@ export default function TeacherDashboard() {
                         Thêm câu hỏi
                       </button>
                     </div>
-                    <div className="question-builder-list">
+                    <div className="question-builder-list" ref={questionListRef}>
                       {questionItems.map((question, questionIndex) => (
-                        <div className="question-builder-card" key={question.id}>
+                        <div className="question-builder-card" key={question.id} data-question-id={question.id}>
                           <div className="question-builder-card-header">
-                            <strong>{question.title || `Câu ${questionIndex + 1}`}</strong>
+                            <div className="question-builder-card-title">
+                              <span className="question-number-badge">{questionIndex + 1}</span>
+                              <div>
+                                <span className="question-builder-card-kicker">Câu hỏi</span>
+                                <strong>{question.title.trim() || "Chưa đặt tiêu đề"}</strong>
+                              </div>
+                            </div>
                             <button type="button" className="btn btn-secondary" onClick={() => removeQuestionItem(questionIndex)}>
                               Xóa câu
                             </button>
                           </div>
                           <div className="question-builder-meta">
                             <label>
-                              <span>Tiêu đề câu</span>
+                              <span>Tiêu đề ngắn</span>
                               <input
                                 className="form-control"
                                 value={question.title}
                                 onChange={(e) => updateQuestionItem(questionIndex, "title", e.target.value)}
-                                placeholder={`Câu ${questionIndex + 1}`}
+                                placeholder="VD: In mảng một chiều"
                               />
                             </label>
                             <label>
@@ -2129,44 +2332,103 @@ export default function TeacherDashboard() {
                               </label>
                               <div className="question-testcase-panel">
                                 <div className="testcase-pair-header">
-                                  <label className="form-label">Testcase của câu này</label>
-                                  <button type="button" className="btn btn-secondary" onClick={() => addQuestionTestcase(questionIndex)}>
-                                    Thêm testcase
-                                  </button>
-                                </div>
-                                <div className="question-testcase-table">
-                                  <div className="question-testcase-row heading">
-                                    <span>Test</span>
-                                    <span>Expected</span>
-                                    <span></span>
+                                  <div>
+                                    <label className="form-label">Testcase của câu này</label>
+                                    <span className="testcase-count-line">
+                                      {question.testcases.filter(isSampleTestcase).length} hiển thị · {question.testcases.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn
+                                    </span>
                                   </div>
-                                  {question.testcases.map((pair, testcaseIndex) => (
-                                    <div className="question-testcase-row" key={`${question.id}-tc-${testcaseIndex}`}>
-                                      <textarea
-                                        className="form-control"
-                                        value={pair.input}
-                                        onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "input", e.target.value)}
-                                        rows={2}
-                                        placeholder="int n = 5; int Arr[] = {1,2,3,4,5}; ArrayShow(Arr,n);"
-                                      />
-                                      <textarea
-                                        className="form-control"
-                                        value={pair.expected}
-                                        onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "expected", e.target.value)}
-                                        rows={2}
-                                        placeholder="1 2 3 4 5"
-                                      />
-                                      <button type="button" className="btn btn-secondary" onClick={() => removeQuestionTestcase(questionIndex, testcaseIndex)}>
-                                        Xóa
-                                      </button>
-                                    </div>
-                                  ))}
+                                </div>
+                                <div className="testcase-group-list">
+                                  {TESTCASE_GROUPS.map((group) => {
+                                    const groupedTestcases = question.testcases
+                                      .map((pair, testcaseIndex) => ({ pair, testcaseIndex }))
+                                      .filter(({ pair }) => isTestcaseInGroup(pair, group.visibility));
+
+                                    return (
+                                      <section className={`testcase-group is-${group.tone}`} key={`${question.id}-${group.visibility}`}>
+                                        <div className="testcase-group-header">
+                                          <div className="testcase-group-title">
+                                            <span className="testcase-status-dot" aria-hidden="true" />
+                                            <strong>{group.title}</strong>
+                                          </div>
+                                          <div className="testcase-group-actions">
+                                            <span className="testcase-group-count">{groupedTestcases.length} case</span>
+                                            <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => addQuestionTestcase(questionIndex, group.visibility)}>
+                                              {group.addLabel}
+                                            </button>
+                                          </div>
+                                        </div>
+                                        {groupedTestcases.length === 0 ? (
+                                          <div className="testcase-group-empty">{group.emptyLabel}</div>
+                                        ) : (
+                                          <div className="question-testcase-table">
+                                            <div className="testcase-table-header">
+                                              <span>Test</span>
+                                              <span>Expected</span>
+                                              <span>Thao tác</span>
+                                            </div>
+                                            {groupedTestcases.map(({ pair, testcaseIndex }) => (
+                                              <div className="question-testcase-row" key={`${question.id}-${group.visibility}-tc-${testcaseIndex}`}>
+                                                <label className="testcase-cell">
+                                                  <span>Test</span>
+                                                  <textarea
+                                                    className="form-control"
+                                                    value={pair.input}
+                                                    onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "input", e.target.value)}
+                                                    rows={2}
+                                                    placeholder="int n = 5; int Arr[] = {1,2,3,4,5}; ArrayShow(Arr,n);"
+                                                  />
+                                                </label>
+                                                <label className="testcase-cell">
+                                                  <span>Expected</span>
+                                                  <textarea
+                                                    className="form-control"
+                                                    value={pair.expected}
+                                                    onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "expected", e.target.value)}
+                                                    rows={2}
+                                                    placeholder="1 2 3 4 5"
+                                                  />
+                                                </label>
+                                                <div className="testcase-row-actions">
+                                                  <button
+                                                    type="button"
+                                                    className="btn btn-secondary btn-compact"
+                                                    onClick={() => updateQuestionTestcase(questionIndex, testcaseIndex, "visibility", oppositeTestcaseVisibility(group.visibility))}
+                                                  >
+                                                    {group.moveLabel}
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    className="btn btn-danger btn-compact"
+                                                    disabled={question.testcases.length <= 1}
+                                                    onClick={() => removeQuestionTestcase(questionIndex, testcaseIndex)}
+                                                  >
+                                                    Xóa
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </section>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </>
                           )}
                         </div>
                       ))}
+                      <div className="question-builder-add-row">
+                        <div>
+                          <strong>Thêm câu hỏi tiếp theo</strong>
+                          <span>Câu mới sẽ nằm ngay dưới cùng và tự đưa con trỏ tới ô nhập đầu tiên.</span>
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
+                          Thêm câu hỏi
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2181,7 +2443,11 @@ export default function TeacherDashboard() {
                             : "Testcase được lấy trực tiếp từ từng câu hỏi. Có thể xem nhanh seed và preview testcase sinh thêm tại đây."}
                         </p>
                       </div>
-                      <span>{newType === "QUIZ_CODE" ? `${questionItems.length} câu` : `${questionTestcases.length} seed + ${generatedCount} generated`}</span>
+                      <span>
+                        {newType === "QUIZ_CODE"
+                          ? `${questionItems.length} câu`
+                          : `${questionSampleCount} hiển thị · ${questionHiddenCount} chấm ẩn · ${generatedCount} sinh thêm`}
+                      </span>
                     </div>
 
                     {newType !== "QUIZ_CODE" && (
@@ -2232,6 +2498,44 @@ export default function TeacherDashboard() {
                         </div>
                       </>
                     )}
+
+                    <div className="student-preview-panel">
+                      <div className="compact-section-heading">
+                        <h4>Preview phía sinh viên</h4>
+                        <span>{questionSampleCount} testcase hiển thị</span>
+                      </div>
+                      <div className="student-preview-list">
+                        {activeQuestions.slice(0, 3).map((question, index) => {
+                          const samplePairs = question.testcases.filter(isSampleTestcase).filter((pair) => pair.input.trim() || pair.expected.trim());
+                          return (
+                            <div className="student-preview-question" key={`preview-${question.id}`}>
+                              <div>
+                                <span>Câu {index + 1}</span>
+                                <strong>{question.title || `Câu ${index + 1}`}</strong>
+                              </div>
+                              <p>{question.prompt || "Chưa nhập nội dung câu hỏi."}</p>
+                              {question.kind === "SINGLE_CHOICE" ? (
+                                <ul>
+                                  {question.options.map((option, optionIndex) => (
+                                    <li key={`preview-option-${question.id}-${optionIndex}`}>
+                                      {String.fromCharCode(65 + optionIndex)}. {option || `Đáp án ${String.fromCharCode(65 + optionIndex)}`}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <div className="student-preview-testcases">
+                                  {samplePairs.length > 0
+                                    ? samplePairs.slice(0, 2).map((pair, pairIndex) => (
+                                        <code key={`preview-sample-${question.id}-${pairIndex}`}>{pair.input || "Không có input"} → {pair.expected || "Chưa có expected"}</code>
+                                      ))
+                                    : <em>Chưa có testcase hiển thị cho sinh viên.</em>}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
                 {!isQuestionSetAssignment && (
@@ -2299,7 +2603,7 @@ export default function TeacherDashboard() {
                       <h4>{assignmentFlow.testcaseTitle}</h4>
                       <p>{assignmentFlow.testcaseHint}</p>
                     </div>
-                    <span>{assignmentFlow.requireTestcases ? `${seedCount} seed + ${generatedCount} generated` : "Tùy chọn"}</span>
+                    <span>{assignmentFlow.requireTestcases ? `${seedCount} seed + ${generatedCount} sinh thêm` : "Tùy chọn"}</span>
                   </div>
                   <div className="testcase-builder-grid">
                     <div>
@@ -2339,38 +2643,88 @@ export default function TeacherDashboard() {
                     </div>
                     <div className="form-group">
                       <div className="testcase-pair-header">
-                        <label className="form-label">Bảng testcase mẫu</label>
-                        <button type="button" className="btn btn-secondary" onClick={addTestcasePair}>
-                          Thêm testcase
-                        </button>
-                      </div>
-                      <div className="testcase-pair-table">
-                        <div className="testcase-pair-row testcase-pair-heading">
-                          <span>Input</span>
-                          <span>Expected output</span>
-                          <span></span>
+                        <div>
+                          <label className="form-label">Bảng testcase</label>
+                          <span className="testcase-count-line">
+                            {testcasePairs.filter(isSampleTestcase).length} hiển thị · {testcasePairs.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn
+                          </span>
                         </div>
-                        {testcasePairs.map((pair, index) => (
-                          <div className="testcase-pair-row" key={`testcase-${index}`}>
-                            <textarea
-                              className="form-control"
-                              value={pair.input}
-                              onChange={(e) => updateTestcasePair(index, "input", e.target.value)}
-                              rows={2}
-                              placeholder="Ví dụ: 17"
-                            />
-                            <textarea
-                              className="form-control"
-                              value={pair.expected}
-                              onChange={(e) => updateTestcasePair(index, "expected", e.target.value)}
-                              rows={2}
-                              placeholder="Ví dụ: YES"
-                            />
-                            <button type="button" className="btn btn-secondary" onClick={() => removeTestcasePair(index)}>
-                              Xóa
-                            </button>
-                          </div>
-                        ))}
+                      </div>
+                      <div className="testcase-group-list">
+                        {TESTCASE_GROUPS.map((group) => {
+                          const groupedTestcases = testcasePairs
+                            .map((pair, index) => ({ pair, index }))
+                            .filter(({ pair }) => isTestcaseInGroup(pair, group.visibility));
+
+                          return (
+                            <section className={`testcase-group is-${group.tone}`} key={`assignment-${group.visibility}`}>
+                              <div className="testcase-group-header">
+                                <div className="testcase-group-title">
+                                  <span className="testcase-status-dot" aria-hidden="true" />
+                                  <strong>{group.title}</strong>
+                                </div>
+                                <div className="testcase-group-actions">
+                                  <span className="testcase-group-count">{groupedTestcases.length} case</span>
+                                  <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => addTestcasePair(group.visibility)}>
+                                    {group.addLabel}
+                                  </button>
+                                </div>
+                              </div>
+                              {groupedTestcases.length === 0 ? (
+                                <div className="testcase-group-empty">{group.emptyLabel}</div>
+                              ) : (
+                                <div className="testcase-pair-table">
+                                  <div className="testcase-table-header">
+                                    <span>Input</span>
+                                    <span>Expected output</span>
+                                    <span>Thao tác</span>
+                                  </div>
+                                  {groupedTestcases.map(({ pair, index }) => (
+                                    <div className="testcase-pair-row" key={`testcase-${group.visibility}-${index}`}>
+                                      <label className="testcase-cell">
+                                        <span>Input</span>
+                                        <textarea
+                                          className="form-control"
+                                          value={pair.input}
+                                          onChange={(e) => updateTestcasePair(index, "input", e.target.value)}
+                                          rows={2}
+                                          placeholder="Ví dụ: 17"
+                                        />
+                                      </label>
+                                      <label className="testcase-cell">
+                                        <span>Expected output</span>
+                                        <textarea
+                                          className="form-control"
+                                          value={pair.expected}
+                                          onChange={(e) => updateTestcasePair(index, "expected", e.target.value)}
+                                          rows={2}
+                                          placeholder="Ví dụ: YES"
+                                        />
+                                      </label>
+                                      <div className="testcase-row-actions">
+                                        <button
+                                          type="button"
+                                          className="btn btn-secondary btn-compact"
+                                          onClick={() => updateTestcasePair(index, "visibility", oppositeTestcaseVisibility(group.visibility))}
+                                        >
+                                          {group.moveLabel}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-danger btn-compact"
+                                          disabled={testcasePairs.length <= 1}
+                                          onClick={() => removeTestcasePair(index)}
+                                        >
+                                          Xóa
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </section>
+                          );
+                        })}
                       </div>
                       <p className="field-hint">Mỗi dòng là một testcase hoàn chỉnh. Input và expected output được tách riêng để tránh nhập nhầm.</p>
                     </div>

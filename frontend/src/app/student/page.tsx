@@ -23,6 +23,14 @@ interface Assignment {
   author_name: string;
 }
 
+const padDatePart = (value: number) => String(value).padStart(2, "0");
+
+const formatDateTime = (value?: string | null) => {
+  const date = new Date(String(value || ""));
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+};
+
 interface Submission {
   id: string;
   status: string;
@@ -83,7 +91,12 @@ type StudentTab = "assignments" | "submit" | "history";
 type AssignmentType = "STANDARD" | "FILL_BLANK" | "DEBUGGING" | "PROJECT" | "QUIZ_CODE";
 type SubmitMode = "editor" | "file";
 type QuestionKind = "CODE" | "TEXT" | "SINGLE_CHOICE";
-type TestcasePair = { input: string; expected: string };
+type TestcaseVisibility = "SAMPLE" | "HIDDEN";
+type TestcasePair = {
+  input: string;
+  expected: string;
+  visibility: TestcaseVisibility;
+};
 type AssignmentQuestion = {
   id: string;
   title: string;
@@ -228,15 +241,25 @@ const languageLabel = (values?: string[]) => {
 const contentPreview = (value?: string, fallback = "Chưa có nội dung.") =>
   value && value.trim() ? value : fallback;
 
+const normalizeTestcasePair = (item: Partial<TestcasePair> | undefined): TestcasePair => {
+  const visibility = item?.visibility === "HIDDEN" ? "HIDDEN" : "SAMPLE";
+  return {
+    input: String(item?.input || ""),
+    expected: String(item?.expected || ""),
+    visibility,
+  };
+};
+
 const parseTestcasePairs = (value?: string): TestcasePair[] => {
   if (!value || !value.trim()) return [];
   try {
     const parsed = JSON.parse(value);
     if (Array.isArray(parsed)) {
       return parsed
-        .map((item) => ({
+        .map((item) => normalizeTestcasePair({
           input: String(item?.input ?? "").trim(),
           expected: String(item?.expected ?? item?.output ?? "").trim(),
+          visibility: item?.visibility === "HIDDEN" ? "HIDDEN" : "SAMPLE",
         }))
         .filter((item) => item.input || item.expected);
     }
@@ -248,7 +271,7 @@ const parseTestcasePairs = (value?: string): TestcasePair[] => {
     .filter(Boolean)
     .map((line) => {
       const parts = line.split(/\s*(?:->|=>|\|)\s*/);
-      return { input: parts[0] || "", expected: parts.slice(1).join(" ") };
+      return { input: parts[0] || "", expected: parts.slice(1).join(" "), visibility: "SAMPLE" };
     });
 };
 
@@ -263,10 +286,7 @@ const normalizeQuestion = (item: Partial<AssignmentQuestion>, index: number): As
   options: Array.from({ length: 4 }, (_, optionIndex) => String(item.options?.[optionIndex] || "")),
   correctOption: Math.min(3, Math.max(0, Number(item.correctOption) || 0)),
   testcases: Array.isArray(item.testcases)
-    ? item.testcases.map((pair) => ({
-        input: String(pair?.input || ""),
-        expected: String(pair?.expected || ""),
-      }))
+    ? item.testcases.map((pair) => normalizeTestcasePair(pair))
     : [],
 });
 
@@ -905,15 +925,7 @@ export default function StudentDashboard() {
       };
     }
 
-    const dateLabel = isMounted
-      ? new Date(assignment.end_date).toLocaleString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : "";
+    const dateLabel = isMounted ? formatDateTime(assignment.end_date) : "";
     const diffMs = endTime - currentTime;
     if (diffMs < 0) {
       return {
@@ -1024,13 +1036,7 @@ export default function StudentDashboard() {
     : earnedPointValue.toFixed(2);
   const maxPointText = Number.isInteger(maxPointDisplay) ? String(maxPointDisplay) : maxPointDisplay.toFixed(2);
   const submittedAtText = selectedSubmission && isMounted
-    ? new Date(selectedSubmission.created_at).toLocaleString("vi-VN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      })
+    ? formatDateTime(selectedSubmission.created_at)
     : "";
   const submissionStatusText = selectedSubmission
     ? selectedSubmission.status === "SUCCESS"
@@ -1219,7 +1225,7 @@ export default function StudentDashboard() {
               </thead>
               <tbody>
                 {scoreEntries.map((score, index) => {
-                  const testcase = question.testcases[index] || { input: "", expected: "" };
+                  const testcase = question.testcases[index] || normalizeTestcasePair(undefined);
                   const failure = failedOutputs?.[String(score.id)];
                   return (
                     <tr key={`${question.id}-trial-${score.id}`}>
@@ -2047,7 +2053,7 @@ export default function StudentDashboard() {
                         >
                           <span>
                             <strong>#{submissionIndex}</strong>
-                            {isMounted ? `${new Date(sub.created_at).toLocaleTimeString()} - ${new Date(sub.created_at).toLocaleDateString()}` : ""}
+                            {isMounted ? formatDateTime(sub.created_at) : ""}
                           </span>
                           <span className={`mock-badge ${sub.status === "SUCCESS" ? "success" : sub.status === "FAILED" ? "danger" : "warning"}`}>
                             {sub.status}
@@ -2064,7 +2070,7 @@ export default function StudentDashboard() {
                       <div className="student-card-header">
                         <div>
                           <h3>Kết quả chấm</h3>
-                          <p>{isMounted ? new Date(selectedSubmission.created_at).toLocaleString("vi-VN") : ""}</p>
+                          <p>{isMounted ? formatDateTime(selectedSubmission.created_at) : ""}</p>
                         </div>
                       </div>
 
