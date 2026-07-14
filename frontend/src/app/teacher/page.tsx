@@ -61,6 +61,7 @@ type TeacherTab = "assignments" | "import" | "teachers" | "students" | "analytic
 
 type AssignmentType = "STANDARD" | "FILL_BLANK" | "DEBUGGING" | "PROJECT" | "QUIZ_CODE";
 type GenerationStrategy = "MUTATION" | "BOUNDARY" | "RANDOMIZED" | "PAIRWISE";
+type AssignmentWizardStep = "SETUP" | "CONTENT" | "TESTCASES" | "REVIEW";
 type TestcaseVisibility = "SAMPLE" | "HIDDEN";
 type TestcasePair = {
   input: string;
@@ -86,6 +87,17 @@ type StructuredAssignmentConfig = {
   mode: "QUESTION_SET";
   questions: AssignmentQuestion[];
 };
+
+const ASSIGNMENT_WIZARD_STEPS: Array<{
+  value: AssignmentWizardStep;
+  title: string;
+  helper: string;
+}> = [
+  { value: "SETUP", title: "Thiết lập", helper: "Thông tin bài" },
+  { value: "CONTENT", title: "Nội dung", helper: "Câu hỏi và đề" },
+  { value: "TESTCASES", title: "Chấm điểm", helper: "Testcase" },
+  { value: "REVIEW", title: "Xem lại", helper: "Kiểm tra cuối" },
+];
 
 const DEFAULT_TESTCASE_PAIRS: TestcasePair[] = [
   { input: "1", expected: "NO", visibility: "SAMPLE" },
@@ -153,6 +165,11 @@ const oppositeTestcaseVisibility = (visibility: TestcaseVisibility): TestcaseVis
   visibility === "SAMPLE" ? "HIDDEN" : "SAMPLE";
 
 const padDatePart = (value: number) => String(value).padStart(2, "0");
+
+const todayDateInputValue = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${padDatePart(today.getMonth() + 1)}-${padDatePart(today.getDate())}`;
+};
 
 const isValidDateParts = (day: number, month: number, year: number) => {
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -399,6 +416,111 @@ const questionSetTestcases = (questions: AssignmentQuestion[]) =>
         visibility: pair.visibility,
       }))
   );
+
+type TestcaseGroupEditorProps = {
+  pairs: TestcasePair[];
+  keyPrefix: string;
+  inputLabel: string;
+  expectedLabel: string;
+  inputPlaceholder: string;
+  expectedPlaceholder: string;
+  canRemove: boolean;
+  onAdd: (visibility: TestcaseVisibility) => void;
+  onUpdate: <K extends keyof TestcasePair>(index: number, field: K, value: TestcasePair[K]) => void;
+  onRemove: (index: number) => void;
+};
+
+function TestcaseGroupEditor({
+  pairs,
+  keyPrefix,
+  inputLabel,
+  expectedLabel,
+  inputPlaceholder,
+  expectedPlaceholder,
+  canRemove,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: TestcaseGroupEditorProps) {
+  return (
+    <div className="testcase-group-list">
+      {TESTCASE_GROUPS.map((group) => {
+        const groupedTestcases = pairs
+          .map((pair, index) => ({ pair, index }))
+          .filter(({ pair }) => isTestcaseInGroup(pair, group.visibility));
+
+        return (
+          <section className={`testcase-group is-${group.tone}`} key={`${keyPrefix}-${group.visibility}`}>
+            <div className="testcase-group-header">
+              <div className="testcase-group-title">
+                <span className="testcase-status-dot" aria-hidden="true" />
+                <strong>{group.title}</strong>
+              </div>
+              <div className="testcase-group-actions">
+                <span className="testcase-group-count">{groupedTestcases.length} case</span>
+                <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => onAdd(group.visibility)}>
+                  {group.addLabel}
+                </button>
+              </div>
+            </div>
+            {groupedTestcases.length === 0 ? (
+              <div className="testcase-group-empty">{group.emptyLabel}</div>
+            ) : (
+              <div className="question-testcase-table">
+                <div className="testcase-table-header">
+                  <span>{inputLabel}</span>
+                  <span>{expectedLabel}</span>
+                  <span>Thao tác</span>
+                </div>
+                {groupedTestcases.map(({ pair, index }) => (
+                  <div className="question-testcase-row" key={`${keyPrefix}-${group.visibility}-tc-${index}`}>
+                    <label className="testcase-cell">
+                      <span>{inputLabel}</span>
+                      <textarea
+                        className="form-control"
+                        value={pair.input}
+                        onChange={(e) => onUpdate(index, "input", e.target.value)}
+                        rows={2}
+                        placeholder={inputPlaceholder}
+                      />
+                    </label>
+                    <label className="testcase-cell">
+                      <span>{expectedLabel}</span>
+                      <textarea
+                        className="form-control"
+                        value={pair.expected}
+                        onChange={(e) => onUpdate(index, "expected", e.target.value)}
+                        rows={2}
+                        placeholder={expectedPlaceholder}
+                      />
+                    </label>
+                    <div className="testcase-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-compact"
+                        onClick={() => onUpdate(index, "visibility", oppositeTestcaseVisibility(group.visibility))}
+                      >
+                        {group.moveLabel}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-compact"
+                        disabled={!canRemove}
+                        onClick={() => onRemove(index)}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
 
 const readAssignmentImportContent = async (file: File) => {
   const lowerName = file.name.toLowerCase();
@@ -663,6 +785,7 @@ export default function TeacherDashboard() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [assignmentWizardStep, setAssignmentWizardStep] = useState<AssignmentWizardStep>("SETUP");
   const [user, setUser] = useState<TeacherUser | null>(null);
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -775,6 +898,78 @@ export default function TeacherDashboard() {
     0,
   );
   const questionGeneratedPreview = generateTestcases(questionTestcases, Math.min(generatedCount, 8), generationStrategy);
+  const assignmentWizardStepIndex = Math.max(0, ASSIGNMENT_WIZARD_STEPS.findIndex((step) => step.value === assignmentWizardStep));
+  const isLastWizardStep = assignmentWizardStepIndex === ASSIGNMENT_WIZARD_STEPS.length - 1;
+
+  const normalizeAssignmentDates = () => {
+    const parsedStart = parseDisplayDate(newStart || newStartDisplay);
+    const parsedEnd = parseDisplayDate(newEnd || newEndDisplay);
+    if (!parsedStart || !parsedEnd) {
+      alert("Vui lòng chọn ngày bắt đầu và hạn nộp.");
+      return null;
+    }
+
+    setNewStart(parsedStart);
+    setNewEnd(parsedEnd);
+    setNewStartDisplay(formatDateOnly(parsedStart));
+    setNewEndDisplay(formatDateOnly(parsedEnd));
+    return { startDate: parsedStart, endDate: parsedEnd };
+  };
+
+  const validateWizardStep = (step: AssignmentWizardStep) => {
+    if (step === "SETUP") {
+      if (!newTitle.trim()) {
+        alert("Vui lòng nhập tên bài tập.");
+        return false;
+      }
+      return Boolean(normalizeAssignmentDates());
+    }
+
+    if (step === "CONTENT") {
+      const flow = getAssignmentFlow(newType);
+      if (isQuestionSetAssignment && !questionItems.some((question) => question.prompt.trim())) {
+        alert("Vui lòng nhập ít nhất một câu hỏi.");
+        return false;
+      }
+      if (newType === "QUIZ_CODE" && questionItems.some((question) => question.options.some((option) => !option.trim()))) {
+        alert("Mỗi câu trắc nghiệm cần đủ 4 đáp án.");
+        return false;
+      }
+      if (!isQuestionSetAssignment && !problemStatement.trim()) {
+        alert(`Vui lòng nhập ${flow.problemLabel.toLowerCase()}.`);
+        return false;
+      }
+      if (!isQuestionSetAssignment && flow.requireStarter && !starterCode.trim()) {
+        alert(`Vui lòng nhập ${flow.starterLabel?.toLowerCase() || "starter/template"}.`);
+        return false;
+      }
+      if (!isQuestionSetAssignment && !referenceSolution.trim()) {
+        alert(`Vui lòng nhập ${flow.solutionLabel.toLowerCase()}.`);
+        return false;
+      }
+      if (!isQuestionSetAssignment && !typeConfig.trim()) {
+        alert(`Vui lòng nhập ${flow.configLabel.toLowerCase()}.`);
+        return false;
+      }
+    }
+
+    if (step === "TESTCASES" && !isQuestionSetAssignment && assignmentFlow.requireTestcases && seedCount === 0) {
+      alert("Vui lòng nhập hoặc import ít nhất một testcase mẫu.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const goToNextWizardStep = () => {
+    const nextStep = ASSIGNMENT_WIZARD_STEPS[assignmentWizardStepIndex + 1]?.value;
+    if (nextStep) setAssignmentWizardStep(nextStep);
+  };
+
+  const goToPreviousWizardStep = () => {
+    const previousStep = ASSIGNMENT_WIZARD_STEPS[assignmentWizardStepIndex - 1]?.value;
+    if (previousStep) setAssignmentWizardStep(previousStep);
+  };
 
   useEffect(() => {
     const focusId = pendingQuestionFocusIdRef.current;
@@ -891,12 +1086,14 @@ export default function TeacherDashboard() {
   };
 
   const resetAssignmentForm = () => {
+    const today = todayDateInputValue();
+    setAssignmentWizardStep("SETUP");
     setNewTitle("");
     setNewType("STANDARD");
-    setNewStart("");
-    setNewEnd("");
-    setNewStartDisplay("");
-    setNewEndDisplay("");
+    setNewStart(today);
+    setNewEnd(today);
+    setNewStartDisplay(formatDateOnly(today));
+    setNewEndDisplay(formatDateOnly(today));
     setNewDesc("");
     setProblemStatement("");
     setStarterCode("");
@@ -917,6 +1114,7 @@ export default function TeacherDashboard() {
   };
 
   const openEditAssignment = (assignment: Assignment) => {
+    setAssignmentWizardStep("SETUP");
     setEditingAssignmentId(assignment.id);
     setNewTitle(assignment.name || "");
     setNewType(assignment.assignment_type || "STANDARD");
@@ -956,50 +1154,35 @@ export default function TeacherDashboard() {
     end_date: endDate,
   });
 
-  const handleAddAssignment = async (e: FormEvent) => {
+  const handleAssignmentFormSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (assignmentWizardStep !== "REVIEW") {
+      goToNextWizardStep();
+    }
+  };
+
+  const handleAddAssignment = async () => {
+    if (assignmentWizardStep !== "REVIEW") return;
     const token = localStorage.getItem("trs_token");
-    if (!token || !newTitle) return;
+    if (!token) return;
 
-    const parsedStart = parseDisplayDate(newStartDisplay);
-    const parsedEnd = parseDisplayDate(newEndDisplay);
-    if (!parsedStart || !parsedEnd) {
-      alert("Vui lòng nhập ngày theo định dạng dd/mm/yyyy.");
+    if (!newTitle.trim()) {
+      setAssignmentWizardStep("SETUP");
+      alert("Vui lòng nhập tên bài tập.");
       return;
     }
 
-    setNewStart(parsedStart);
-    setNewEnd(parsedEnd);
-    setNewStartDisplay(formatDateOnly(parsedStart));
-    setNewEndDisplay(formatDateOnly(parsedEnd));
-
-    const flow = getAssignmentFlow(newType);
-    if (isQuestionSetAssignment && !questionItems.some((question) => question.prompt.trim())) {
-      alert("Vui lòng nhập ít nhất một câu hỏi.");
+    const normalizedDates = normalizeAssignmentDates();
+    if (!normalizedDates) {
+      setAssignmentWizardStep("SETUP");
       return;
     }
-    if (newType === "QUIZ_CODE" && questionItems.some((question) => question.options.some((option) => !option.trim()))) {
-      alert("Mỗi câu trắc nghiệm cần đủ 4 đáp án.");
+    if (!validateWizardStep("CONTENT")) {
+      setAssignmentWizardStep("CONTENT");
       return;
     }
-    if (!isQuestionSetAssignment && !problemStatement.trim()) {
-      alert(`Vui lòng nhập ${flow.problemLabel.toLowerCase()}.`);
-      return;
-    }
-    if (!isQuestionSetAssignment && flow.requireStarter && !starterCode.trim()) {
-      alert(`Vui lòng nhập ${flow.starterLabel?.toLowerCase() || "starter/template"}.`);
-      return;
-    }
-    if (!isQuestionSetAssignment && !referenceSolution.trim()) {
-      alert(`Vui lòng nhập ${flow.solutionLabel.toLowerCase()}.`);
-      return;
-    }
-    if (!isQuestionSetAssignment && !typeConfig.trim()) {
-      alert(`Vui lòng nhập ${flow.configLabel.toLowerCase()}.`);
-      return;
-    }
-    if (!isQuestionSetAssignment && flow.requireTestcases && seedCount === 0) {
-      alert("Vui lòng nhập hoặc import ít nhất một testcase mẫu.");
+    if (!validateWizardStep("TESTCASES")) {
+      setAssignmentWizardStep("TESTCASES");
       return;
     }
 
@@ -1010,7 +1193,7 @@ export default function TeacherDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(assignmentPayload(parsedStart, parsedEnd)),
+        body: JSON.stringify(assignmentPayload(normalizedDates.startDate, normalizedDates.endDate)),
       });
 
       if (!response.ok) {
@@ -2061,26 +2244,35 @@ export default function TeacherDashboard() {
               <h3 className="modal-title">{editingAssignmentId ? "Sửa bài tập" : "Tạo bài tập lớn mới"}</h3>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>×</button>
             </div>
-            <form onSubmit={handleAddAssignment}>
+            <form onSubmit={handleAssignmentFormSubmit}>
               <div className="modal-body">
-                <div className="assignment-builder-overview">
-                  <div>
-                    <span>Đang tạo</span>
-                    <strong>{assignmentFlow.label}</strong>
-                    <p>{assignmentFlow.summary}</p>
-                  </div>
-                  <ol>
-                    <li>Chọn dạng bài</li>
-                    <li>Nhập thông tin giao bài</li>
-                    <li>Đưa nội dung đúng dạng</li>
-                    <li>Cấu hình chấm và kiểm thử</li>
-                  </ol>
+                <div className="assignment-wizard-stepper" aria-label="Tiến trình tạo bài tập">
+                  {ASSIGNMENT_WIZARD_STEPS.map((step, index) => {
+                    const isActive = index === assignmentWizardStepIndex;
+                    const isComplete = index < assignmentWizardStepIndex;
+                    const isReachable = index <= assignmentWizardStepIndex;
+                    return (
+                      <button
+                        type="button"
+                        key={step.value}
+                        className={`assignment-wizard-step ${isActive ? "active" : ""} ${isComplete ? "complete" : ""}`}
+                        disabled={!isReachable}
+                        onClick={() => setAssignmentWizardStep(step.value)}
+                      >
+                        <span>{isComplete ? "✓" : index + 1}</span>
+                        <div>
+                          <strong>{step.title}</strong>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
+                {assignmentWizardStep === "SETUP" && (
+                <>
                 <div className="builder-step-heading">
-                  <span>1</span>
                   <div>
-                    <strong>Thông tin nhận diện bài tập</strong>
+                    <strong>Thiết lập bài tập</strong>
                     <p>Đặt tên, thời gian và mô tả ngắn để sinh viên biết đây là bài gì.</p>
                   </div>
                 </div>
@@ -2095,10 +2287,51 @@ export default function TeacherDashboard() {
                     required
                   />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Mô tả bài tập</label>
+                  <textarea
+                    className="form-control"
+                    placeholder="Mô tả các yêu cầu và đầu ra cần có..."
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ngày bắt đầu</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={newStart}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewStart(value);
+                      setNewStartDisplay(formatDateOnly(value));
+                    }}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Hạn nộp bài</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={newEnd}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewEnd(value);
+                      setNewEndDisplay(formatDateOnly(value));
+                    }}
+                    required
+                  />
+                </div>
+                </>
+                )}
+                {assignmentWizardStep === "CONTENT" && (
+                <>
                 <div className="builder-step-heading compact">
-                  <span>2</span>
                   <div>
-                    <strong>Chọn đúng dạng bài</strong>
+                    <strong>Dạng bài</strong>
                     <p>Dạng bài quyết định các trường bắt buộc và cách hệ thống hiểu file import.</p>
                   </div>
                 </div>
@@ -2154,10 +2387,9 @@ export default function TeacherDashboard() {
                   </div>
                 </div>
                 <div className="builder-step-heading">
-                  <span>3</span>
                   <div>
-                    <strong>Nội dung theo dạng {assignmentFlow.label}</strong>
-                    <p>{assignmentFlow.importHint}</p>
+                    <strong>Nội dung bài</strong>
+                    <p>Theo dạng {assignmentFlow.label}. {assignmentFlow.importHint}</p>
                   </div>
                 </div>
                 <div className="form-group import-field">
@@ -2172,74 +2404,28 @@ export default function TeacherDashboard() {
                     Bài thường/quiz: file vào đề bài. Đục lỗ/sửa lỗi/project: file vào template hoặc starter code.
                   </p>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Ngày bắt đầu</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="form-control"
-                    placeholder="dd/mm/yyyy"
-                    value={newStartDisplay}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setNewStartDisplay(value);
-                      const parsed = parseDisplayDate(value);
-                      if (parsed !== null) setNewStart(parsed);
-                    }}
-                    onBlur={() => {
-                      const parsed = parseDisplayDate(newStartDisplay);
-                      if (parsed) {
-                        setNewStart(parsed);
-                        setNewStartDisplay(formatDateOnly(parsed));
-                      }
-                    }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Hạn nộp bài</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    className="form-control"
-                    placeholder="dd/mm/yyyy"
-                    value={newEndDisplay}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setNewEndDisplay(value);
-                      const parsed = parseDisplayDate(value);
-                      if (parsed !== null) setNewEnd(parsed);
-                    }}
-                    onBlur={() => {
-                      const parsed = parseDisplayDate(newEndDisplay);
-                      if (parsed) {
-                        setNewEnd(parsed);
-                        setNewEndDisplay(formatDateOnly(parsed));
-                      }
-                    }}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Mô tả bài tập</label>
-                  <textarea
-                    className="form-control"
-                    placeholder="Mô tả các yêu cầu và đầu ra cần có..."
-                    value={newDesc}
-                    onChange={(e) => setNewDesc(e.target.value)}
-                    rows={4}
-                  />
-                </div>
-                {isQuestionSetAssignment && (
+                </>
+                )}
+                {isQuestionSetAssignment && (assignmentWizardStep === "CONTENT" || assignmentWizardStep === "TESTCASES") && (
                   <div className="question-builder-panel">
                     <div className="panel-title-row">
                       <div>
-                        <h4>{newType === "QUIZ_CODE" ? "Danh sách câu trắc nghiệm" : "Danh sách câu hỏi lập trình"}</h4>
-                        <p>{newType === "QUIZ_CODE" ? "Mỗi câu có 4 đáp án, chọn một đáp án đúng." : "Mỗi câu có đề riêng, điểm riêng và testcase mẫu riêng để sinh viên hiểu cần làm gì."}</p>
+                        <h4>
+                          {assignmentWizardStep === "TESTCASES"
+                            ? "Testcase theo từng câu"
+                            : (newType === "QUIZ_CODE" ? "Danh sách câu trắc nghiệm" : "Danh sách câu hỏi lập trình")}
+                        </h4>
+                        <p>
+                          {assignmentWizardStep === "TESTCASES"
+                            ? "Mỗi câu giữ testcase hiển thị và testcase chấm ẩn trong một vùng riêng."
+                            : (newType === "QUIZ_CODE" ? "Mỗi câu có 4 đáp án, chọn một đáp án đúng." : "Mỗi câu có đề riêng, điểm riêng và lời giải chuẩn riêng.")}
+                        </p>
                       </div>
+                      {assignmentWizardStep === "CONTENT" && (
                       <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
                         Thêm câu hỏi
                       </button>
+                      )}
                     </div>
                     <div className="question-builder-list" ref={questionListRef}>
                       {questionItems.map((question, questionIndex) => (
@@ -2256,80 +2442,92 @@ export default function TeacherDashboard() {
                               Xóa câu
                             </button>
                           </div>
-                          <div className="question-builder-meta">
-                            <label>
-                              <span>Tiêu đề ngắn</span>
-                              <input
+                          {assignmentWizardStep === "CONTENT" && (
+                          <>
+                            <div className="question-builder-meta">
+                              <label>
+                                <span>Tiêu đề ngắn</span>
+                                <input
+                                  className="form-control"
+                                  value={question.title}
+                                  onChange={(e) => updateQuestionItem(questionIndex, "title", e.target.value)}
+                                  placeholder="VD: In mảng một chiều"
+                                />
+                              </label>
+                              <label>
+                                <span>Điểm</span>
+                                <input
+                                  className="form-control"
+                                  type="number"
+                                  min={0}
+                                  step={0.25}
+                                  value={question.points}
+                                  onChange={(e) => updateQuestionItem(questionIndex, "points", Number(e.target.value))}
+                                />
+                              </label>
+                            </div>
+                            <label className="question-builder-field">
+                              <span>Nội dung câu hỏi</span>
+                              <textarea
                                 className="form-control"
-                                value={question.title}
-                                onChange={(e) => updateQuestionItem(questionIndex, "title", e.target.value)}
-                                placeholder="VD: In mảng một chiều"
+                                value={question.prompt}
+                                onChange={(e) => updateQuestionItem(questionIndex, "prompt", e.target.value)}
+                                rows={4}
+                                placeholder={newType === "QUIZ_CODE" ? "Ví dụ: Độ phức tạp của thuật toán binary search là gì?" : "Ví dụ: Define a function named ArrayShow to show elements of an integer array, size n."}
                               />
                             </label>
-                            <label>
-                              <span>Điểm</span>
-                              <input
-                                className="form-control"
-                                type="number"
-                                min={0}
-                                step={0.25}
-                                value={question.points}
-                                onChange={(e) => updateQuestionItem(questionIndex, "points", Number(e.target.value))}
-                              />
-                            </label>
-                          </div>
-                          <label className="question-builder-field">
-                            <span>Nội dung câu hỏi</span>
-                            <textarea
-                              className="form-control"
-                              value={question.prompt}
-                              onChange={(e) => updateQuestionItem(questionIndex, "prompt", e.target.value)}
-                              rows={4}
-                              placeholder={newType === "QUIZ_CODE" ? "Ví dụ: Độ phức tạp của thuật toán binary search là gì?" : "Ví dụ: Define a function named ArrayShow to show elements of an integer array, size n."}
-                            />
-                          </label>
-                          {newType === "QUIZ_CODE" ? (
-                            <div className="question-options-grid">
-                              {question.options.map((option, optionIndex) => (
-                                <label key={`option-${question.id}-${optionIndex}`} className={question.correctOption === optionIndex ? "selected" : ""}>
-                                  <input
-                                    type="radio"
-                                    name={`correct-${question.id}`}
-                                    checked={question.correctOption === optionIndex}
-                                    onChange={() => updateQuestionItem(questionIndex, "correctOption", optionIndex)}
-                                  />
-                                  <span>{String.fromCharCode(65 + optionIndex)}</span>
-                                  <input
-                                    className="form-control"
-                                    value={option}
-                                    onChange={(e) => updateQuestionOption(questionIndex, optionIndex, e.target.value)}
-                                    placeholder={`Đáp án ${String.fromCharCode(65 + optionIndex)}`}
+                            {newType === "QUIZ_CODE" ? (
+                              <div className="question-options-grid">
+                                {question.options.map((option, optionIndex) => (
+                                  <label key={`option-${question.id}-${optionIndex}`} className={question.correctOption === optionIndex ? "selected" : ""}>
+                                    <input
+                                      type="radio"
+                                      name={`correct-${question.id}`}
+                                      checked={question.correctOption === optionIndex}
+                                      onChange={() => updateQuestionItem(questionIndex, "correctOption", optionIndex)}
+                                    />
+                                    <span>{String.fromCharCode(65 + optionIndex)}</span>
+                                    <input
+                                      className="form-control"
+                                      value={option}
+                                      onChange={(e) => updateQuestionOption(questionIndex, optionIndex, e.target.value)}
+                                      placeholder={`Đáp án ${String.fromCharCode(65 + optionIndex)}`}
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <>
+                                <label className="question-builder-field">
+                                  <span>Starter code / khung trả lời</span>
+                                  <textarea
+                                    className="form-control testcase-textarea"
+                                    value={question.starterCode}
+                                    onChange={(e) => updateQuestionItem(questionIndex, "starterCode", e.target.value)}
+                                    rows={4}
+                                    placeholder="Ví dụ: void ArrayShow(int a[], int n) { ... }"
                                   />
                                 </label>
-                              ))}
-                            </div>
-                          ) : (
-                            <>
-                              <label className="question-builder-field">
-                                <span>Starter code / khung trả lời</span>
-                                <textarea
-                                  className="form-control testcase-textarea"
-                                  value={question.starterCode}
-                                  onChange={(e) => updateQuestionItem(questionIndex, "starterCode", e.target.value)}
-                                  rows={4}
-                                  placeholder="Ví dụ: void ArrayShow(int a[], int n) { ... }"
-                                />
-                              </label>
-                              <label className="question-builder-field">
-                                <span>Đáp án chuẩn / ghi chú chấm</span>
-                                <textarea
-                                  className="form-control testcase-textarea"
-                                  value={question.referenceAnswer}
-                                  onChange={(e) => updateQuestionItem(questionIndex, "referenceAnswer", e.target.value)}
-                                  rows={4}
-                                  placeholder="Dán lời giải tham chiếu hoặc mô tả output đúng."
-                                />
-                              </label>
+                                <label className="question-builder-field">
+                                  <span>Đáp án chuẩn / ghi chú chấm</span>
+                                  <textarea
+                                    className="form-control testcase-textarea"
+                                    value={question.referenceAnswer}
+                                    onChange={(e) => updateQuestionItem(questionIndex, "referenceAnswer", e.target.value)}
+                                    rows={4}
+                                    placeholder="Dán lời giải tham chiếu hoặc mô tả output đúng."
+                                  />
+                                </label>
+                              </>
+                            )}
+                          </>
+                          )}
+                          {assignmentWizardStep === "TESTCASES" && (
+                            newType === "QUIZ_CODE" ? (
+                              <div className="question-testcase-panel">
+                                <p className="field-hint">Câu trắc nghiệm được chấm theo đáp án đúng đã chọn ở bước nội dung.</p>
+                              </div>
+                            ) : (
                               <div className="question-testcase-panel">
                                 <div className="testcase-pair-header">
                                   <div>
@@ -2339,87 +2537,24 @@ export default function TeacherDashboard() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="testcase-group-list">
-                                  {TESTCASE_GROUPS.map((group) => {
-                                    const groupedTestcases = question.testcases
-                                      .map((pair, testcaseIndex) => ({ pair, testcaseIndex }))
-                                      .filter(({ pair }) => isTestcaseInGroup(pair, group.visibility));
-
-                                    return (
-                                      <section className={`testcase-group is-${group.tone}`} key={`${question.id}-${group.visibility}`}>
-                                        <div className="testcase-group-header">
-                                          <div className="testcase-group-title">
-                                            <span className="testcase-status-dot" aria-hidden="true" />
-                                            <strong>{group.title}</strong>
-                                          </div>
-                                          <div className="testcase-group-actions">
-                                            <span className="testcase-group-count">{groupedTestcases.length} case</span>
-                                            <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => addQuestionTestcase(questionIndex, group.visibility)}>
-                                              {group.addLabel}
-                                            </button>
-                                          </div>
-                                        </div>
-                                        {groupedTestcases.length === 0 ? (
-                                          <div className="testcase-group-empty">{group.emptyLabel}</div>
-                                        ) : (
-                                          <div className="question-testcase-table">
-                                            <div className="testcase-table-header">
-                                              <span>Test</span>
-                                              <span>Expected</span>
-                                              <span>Thao tác</span>
-                                            </div>
-                                            {groupedTestcases.map(({ pair, testcaseIndex }) => (
-                                              <div className="question-testcase-row" key={`${question.id}-${group.visibility}-tc-${testcaseIndex}`}>
-                                                <label className="testcase-cell">
-                                                  <span>Test</span>
-                                                  <textarea
-                                                    className="form-control"
-                                                    value={pair.input}
-                                                    onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "input", e.target.value)}
-                                                    rows={2}
-                                                    placeholder="int n = 5; int Arr[] = {1,2,3,4,5}; ArrayShow(Arr,n);"
-                                                  />
-                                                </label>
-                                                <label className="testcase-cell">
-                                                  <span>Expected</span>
-                                                  <textarea
-                                                    className="form-control"
-                                                    value={pair.expected}
-                                                    onChange={(e) => updateQuestionTestcase(questionIndex, testcaseIndex, "expected", e.target.value)}
-                                                    rows={2}
-                                                    placeholder="1 2 3 4 5"
-                                                  />
-                                                </label>
-                                                <div className="testcase-row-actions">
-                                                  <button
-                                                    type="button"
-                                                    className="btn btn-secondary btn-compact"
-                                                    onClick={() => updateQuestionTestcase(questionIndex, testcaseIndex, "visibility", oppositeTestcaseVisibility(group.visibility))}
-                                                  >
-                                                    {group.moveLabel}
-                                                  </button>
-                                                  <button
-                                                    type="button"
-                                                    className="btn btn-danger btn-compact"
-                                                    disabled={question.testcases.length <= 1}
-                                                    onClick={() => removeQuestionTestcase(questionIndex, testcaseIndex)}
-                                                  >
-                                                    Xóa
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </section>
-                                    );
-                                  })}
-                                </div>
+                                <TestcaseGroupEditor
+                                  pairs={question.testcases}
+                                  keyPrefix={question.id}
+                                  inputLabel="Test"
+                                  expectedLabel="Expected"
+                                  inputPlaceholder="int n = 5; int Arr[] = {1,2,3,4,5}; ArrayShow(Arr,n);"
+                                  expectedPlaceholder="1 2 3 4 5"
+                                  canRemove={question.testcases.length > 1}
+                                  onAdd={(visibility) => addQuestionTestcase(questionIndex, visibility)}
+                                  onUpdate={(testcaseIndex, field, value) => updateQuestionTestcase(questionIndex, testcaseIndex, field, value)}
+                                  onRemove={(testcaseIndex) => removeQuestionTestcase(questionIndex, testcaseIndex)}
+                                />
                               </div>
-                            </>
+                            )
                           )}
                         </div>
                       ))}
+                      {assignmentWizardStep === "CONTENT" && (
                       <div className="question-builder-add-row">
                         <div>
                           <strong>Thêm câu hỏi tiếp theo</strong>
@@ -2429,10 +2564,11 @@ export default function TeacherDashboard() {
                           Thêm câu hỏi
                         </button>
                       </div>
+                      )}
                     </div>
                   </div>
                 )}
-                {isQuestionSetAssignment && (
+                {isQuestionSetAssignment && (assignmentWizardStep === "TESTCASES" || assignmentWizardStep === "REVIEW") && (
                   <div className="assignment-testcase-builder question-testcase-summary-panel">
                     <div className="panel-title-row">
                       <div>
@@ -2538,7 +2674,7 @@ export default function TeacherDashboard() {
                     </div>
                   </div>
                 )}
-                {!isQuestionSetAssignment && (
+                {!isQuestionSetAssignment && assignmentWizardStep === "CONTENT" && (
                 <>
                 <div className="assignment-logic-panel">
                   <div className="panel-title-row">
@@ -2590,10 +2726,13 @@ export default function TeacherDashboard() {
                     />
                   </div>
                 </div>
+                </>
+                )}
+                {!isQuestionSetAssignment && assignmentWizardStep === "TESTCASES" && (
+                <>
                 <div className="builder-step-heading">
-                  <span>4</span>
                   <div>
-                    <strong>Chấm và kiểm thử</strong>
+                    <strong>Testcase và chấm điểm</strong>
                     <p>{assignmentFlow.requireTestcases ? "Dạng bài này cần testcase mẫu để chấm tự động và sinh thêm biến thể." : "Dạng bài này không bắt buộc testcase; chỉ nhập khi cần kiểm chứng tự động."}</p>
                   </div>
                 </div>
@@ -2650,82 +2789,18 @@ export default function TeacherDashboard() {
                           </span>
                         </div>
                       </div>
-                      <div className="testcase-group-list">
-                        {TESTCASE_GROUPS.map((group) => {
-                          const groupedTestcases = testcasePairs
-                            .map((pair, index) => ({ pair, index }))
-                            .filter(({ pair }) => isTestcaseInGroup(pair, group.visibility));
-
-                          return (
-                            <section className={`testcase-group is-${group.tone}`} key={`assignment-${group.visibility}`}>
-                              <div className="testcase-group-header">
-                                <div className="testcase-group-title">
-                                  <span className="testcase-status-dot" aria-hidden="true" />
-                                  <strong>{group.title}</strong>
-                                </div>
-                                <div className="testcase-group-actions">
-                                  <span className="testcase-group-count">{groupedTestcases.length} case</span>
-                                  <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => addTestcasePair(group.visibility)}>
-                                    {group.addLabel}
-                                  </button>
-                                </div>
-                              </div>
-                              {groupedTestcases.length === 0 ? (
-                                <div className="testcase-group-empty">{group.emptyLabel}</div>
-                              ) : (
-                                <div className="testcase-pair-table">
-                                  <div className="testcase-table-header">
-                                    <span>Input</span>
-                                    <span>Expected output</span>
-                                    <span>Thao tác</span>
-                                  </div>
-                                  {groupedTestcases.map(({ pair, index }) => (
-                                    <div className="testcase-pair-row" key={`testcase-${group.visibility}-${index}`}>
-                                      <label className="testcase-cell">
-                                        <span>Input</span>
-                                        <textarea
-                                          className="form-control"
-                                          value={pair.input}
-                                          onChange={(e) => updateTestcasePair(index, "input", e.target.value)}
-                                          rows={2}
-                                          placeholder="Ví dụ: 17"
-                                        />
-                                      </label>
-                                      <label className="testcase-cell">
-                                        <span>Expected output</span>
-                                        <textarea
-                                          className="form-control"
-                                          value={pair.expected}
-                                          onChange={(e) => updateTestcasePair(index, "expected", e.target.value)}
-                                          rows={2}
-                                          placeholder="Ví dụ: YES"
-                                        />
-                                      </label>
-                                      <div className="testcase-row-actions">
-                                        <button
-                                          type="button"
-                                          className="btn btn-secondary btn-compact"
-                                          onClick={() => updateTestcasePair(index, "visibility", oppositeTestcaseVisibility(group.visibility))}
-                                        >
-                                          {group.moveLabel}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="btn btn-danger btn-compact"
-                                          disabled={testcasePairs.length <= 1}
-                                          onClick={() => removeTestcasePair(index)}
-                                        >
-                                          Xóa
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </section>
-                          );
-                        })}
-                      </div>
+                      <TestcaseGroupEditor
+                        pairs={testcasePairs}
+                        keyPrefix="assignment"
+                        inputLabel="Input"
+                        expectedLabel="Expected output"
+                        inputPlaceholder="Ví dụ: 17"
+                        expectedPlaceholder="Ví dụ: YES"
+                        canRemove={testcasePairs.length > 1}
+                        onAdd={addTestcasePair}
+                        onUpdate={updateTestcasePair}
+                        onRemove={removeTestcasePair}
+                      />
                       <p className="field-hint">Mỗi dòng là một testcase hoàn chỉnh. Input và expected output được tách riêng để tránh nhập nhầm.</p>
                     </div>
                   </div>
@@ -2741,14 +2816,67 @@ export default function TeacherDashboard() {
                 </div>
                 </>
                 )}
+                {assignmentWizardStep === "REVIEW" && (
+                  <div className="assignment-review-panel">
+                    <div className="panel-title-row">
+                      <div>
+                        <h4>Xem lại trước khi {editingAssignmentId ? "lưu" : "tạo"}</h4>
+                        <p>Kiểm tra nhanh thông tin, nội dung và cấu hình chấm trước khi gửi lên hệ thống.</p>
+                      </div>
+                    </div>
+                    <div className="assignment-review-grid">
+                      <section>
+                        <span>Tên bài</span>
+                        <strong>{newTitle || "Chưa nhập tên bài"}</strong>
+                        <p>{assignmentFlow.label} · {languageLabel(languages)}</p>
+                      </section>
+                      <section>
+                        <span>Thời gian</span>
+                        <strong>{newStart ? formatDateOnly(newStart) : "Chưa có ngày"} → {newEnd ? formatDateOnly(newEnd) : "Chưa có hạn"}</strong>
+                        <p>{newDesc || "Chưa có mô tả ngắn."}</p>
+                      </section>
+                      <section>
+                        <span>Nội dung</span>
+                        <strong>{isQuestionSetAssignment ? `${questionItems.length} câu` : assignmentFlow.problemLabel}</strong>
+                        <p>
+                          {isQuestionSetAssignment
+                            ? `${questionItems.reduce((sum, question) => sum + Number(question.points || 0), 0)} điểm`
+                            : (problemStatement || "Chưa nhập nội dung chính.")}
+                        </p>
+                      </section>
+                      <section>
+                        <span>Chấm điểm</span>
+                        <strong>
+                          {isQuestionSetAssignment
+                            ? `${questionSampleCount} hiển thị · ${questionHiddenCount} chấm ẩn`
+                            : `${testcasePairs.filter(isSampleTestcase).length} hiển thị · ${testcasePairs.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn`}
+                        </strong>
+                        <p>{generatedCount} testcase sinh thêm</p>
+                      </section>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
                   Hủy
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingAssignmentId ? "Lưu thay đổi" : "Tạo mới"}
-                </button>
+                <div className="assignment-wizard-footer-actions">
+                  {assignmentWizardStepIndex > 0 && (
+                    <button type="button" className="btn btn-secondary" onClick={goToPreviousWizardStep}>
+                      Quay lại
+                    </button>
+                  )}
+                  {!isLastWizardStep ? (
+                    <button type="button" className="btn btn-primary" onClick={goToNextWizardStep}>
+                      Tiếp theo
+                    </button>
+                  ) : (
+                    <button type="button" className="btn btn-primary" onClick={handleAddAssignment}>
+                      {editingAssignmentId ? "Lưu thay đổi" : "Tạo mới"}
+                    </button>
+                  )}
+                </div>
               </div>
             </form>
           </div>
