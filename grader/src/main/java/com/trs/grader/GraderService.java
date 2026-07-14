@@ -2,6 +2,7 @@ package com.trs.grader;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,9 +24,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 @Service
 public class GraderService {
     private static final Logger logger = LoggerFactory.getLogger(GraderService.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final List<String> SUPPORT_FILE_NAMES = List.of("main.cpp", "main.hpp", "tc.hpp", "mnist.csv");
     private static final List<Integer> TESTCASE_IDS = buildTestcaseIds();
     private static final Duration COMPILE_TIMEOUT = Duration.ofSeconds(15);
@@ -55,6 +60,10 @@ public class GraderService {
         try {
             Files.createDirectories(workspacePath);
             saveSubmittedFiles(workspacePath, request.safeFiles());
+
+            if (!request.safeCustomTestcases().isEmpty()) {
+                return GradeOutcome.ok(gradeCustomTestcases(workspacePath, request));
+            }
 
             GradeOutcome copySupportOutcome = copySupportFiles(supportFilesDir, workspacePath);
             if (copySupportOutcome != null) {
@@ -147,6 +156,205 @@ public class GraderService {
                     .map(path -> path.getFileName().toString())
                     .filter(name -> name.endsWith(".cpp"))
                     .filter(name -> !name.equals("main.cpp"))
+                    .sorted()
+                    .toList();
+        }
+    }
+
+    private GraderResponse gradeCustomTestcases(Path workspacePath, GraderRequest request) throws IOException, InterruptedException {
+        Map<Integer, String> questionAnswers = readQuestionAnswers(request);
+        if (!questionAnswers.isEmpty()) {
+            return gradeQuestionAnswers(workspacePath, request, questionAnswers);
+        }
+
+        List<String> cppFiles = findAllCppFiles(workspacePath);
+        if (cppFiles.isEmpty()) {
+            return new GraderResponse("FAILED", Map.of(), Map.of(), "No C/C++ source files found.", null);
+        }
+
+        Path executablePath = workspacePath.resolve(executableName());
+        List<String> compileCommand = new ArrayList<>();
+        compileCommand.add("g++");
+        compileCommand.add("-g");
+        compileCommand.add("-o");
+        compileCommand.add(executablePath.getFileName().toString());
+        compileCommand.addAll(cppFiles);
+        compileCommand.add("-I");
+        compileCommand.add(".");
+        compileCommand.add("-std=c++11");
+
+        logger.info("Custom testcase compilation command: {}", String.join(" ", compileCommand));
+        ProcessResult compileResult = runProcess(compileCommand, workspacePath, COMPILE_TIMEOUT);
+        if (compileResult.timedOut()) {
+            return new GraderResponse("FAILED", Map.of(), Map.of(), "Compilation timed out after 15 seconds.", null);
+        }
+        if (compileResult.exitCode() != 0) {
+            return new GraderResponse("FAILED", Map.of(), Map.of(), compileResult.stderr(), null);
+        }
+
+        Map<String, Boolean> scores = new LinkedHashMap<>();
+        Map<String, FailedOutput> failedOutputs = new LinkedHashMap<>();
+        List<String> runtimeErrors = new ArrayList<>();
+        List<GraderTestcase> testcases = request.safeCustomTestcases();
+
+        for (int index = 0; index < testcases.size(); index++) {
+            GraderTestcase testcase = testcases.get(index);
+            String testcaseKey = String.valueOf(index + 1);
+            try {
+                ProcessResult runResult = runProcessWithInput(
+                        List.of(executablePath.toAbsolutePath().toString()),
+                        workspacePath,
+                        TESTCASE_TIMEOUT,
+                        testcase.safeInput()
+                );
+                if (runResult.timedOut()) {
+                    String errorMessage = "tc" + testcaseKey + " execution timed out (limit: 5s)";
+                    scores.put(testcaseKey, false);
+                    failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, errorMessage));
+                    runtimeErrors.add(errorMessage);
+                    continue;
+                }
+                if (runResult.exitCode() != 0) {
+                    String errorMessage = "tc" + testcaseKey + " exited with code "
+                            + runResult.exitCode() + ": " + runResult.stderr().strip();
+                    scores.put(testcaseKey, false);
+                    failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, errorMessage));
+                    runtimeErrors.add(errorMessage);
+                    continue;
+                }
+
+                String normalizedActual = normalizeOutput(runResult.stdout());
+                String normalizedExpected = normalizeOutput(testcase.safeExpected());
+                boolean passed = normalizedActual.equals(normalizedExpected);
+                scores.put(testcaseKey, passed);
+                if (!passed) {
+                    failedOutputs.put(testcaseKey, new FailedOutput(
+                            truncate(normalizedExpected),
+                            truncate(normalizedActual),
+                            null
+                    ));
+                }
+            } catch (Exception ex) {
+                String errorMessage = "tc" + testcaseKey + " failed with error: " + ex.getMessage();
+                scores.put(testcaseKey, false);
+                failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, errorMessage));
+                runtimeErrors.add(errorMessage);
+            }
+        }
+
+        long passedCount = scores.values().stream().filter(Boolean::booleanValue).count();
+        logger.info("Completed custom grading submission {}. Passed: {}/{}", request.submissionId(), passedCount, testcases.size());
+        String runtimeErrorSummary = runtimeErrors.isEmpty() ? null : String.join("\n", runtimeErrors);
+        return new GraderResponse("SUCCESS", scores, failedOutputs, null, runtimeErrorSummary);
+    }
+
+    private Map<Integer, String> readQuestionAnswers(GraderRequest request) {
+        return request.safeFiles().stream()
+                .filter(file -> "answers.json".equalsIgnoreCase(file.filename()))
+                .findFirst()
+                .map(file -> {
+                    try {
+                        JsonNode root = OBJECT_MAPPER.readTree(file.safeContent());
+                        JsonNode answers = root.path("answers");
+                        Map<Integer, String> result = new LinkedHashMap<>();
+                        if (answers.isArray()) {
+                            for (JsonNode answer : answers) {
+                                int question = answer.path("question").asInt(0);
+                                if (question > 0) {
+                                    result.put(question, answer.path("answer").asText(""));
+                                }
+                            }
+                        }
+                        return result;
+                    } catch (Exception ex) {
+                        logger.warn("Could not parse answers.json for submission {}", request.submissionId(), ex);
+                        return Map.<Integer, String>of();
+                    }
+                })
+                .orElseGet(Map::of);
+    }
+
+    private GraderResponse gradeQuestionAnswers(Path workspacePath, GraderRequest request, Map<Integer, String> questionAnswers)
+            throws IOException, InterruptedException {
+        Map<String, Boolean> scores = new LinkedHashMap<>();
+        Map<String, FailedOutput> failedOutputs = new LinkedHashMap<>();
+        List<String> runtimeErrors = new ArrayList<>();
+        List<GraderTestcase> testcases = request.safeCustomTestcases();
+
+        for (int index = 0; index < testcases.size(); index++) {
+            GraderTestcase testcase = testcases.get(index);
+            String testcaseKey = String.valueOf(index + 1);
+            String answer = questionAnswers.getOrDefault(testcase.safeQuestion(), "");
+            if (answer.isBlank()) {
+                scores.put(testcaseKey, false);
+                failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, "Question " + testcase.safeQuestion() + " has no answer."));
+                continue;
+            }
+
+            Path sourcePath = workspacePath.resolve("question_" + testcase.safeQuestion() + "_tc_" + (index + 1) + ".cpp");
+            Path executablePath = workspacePath.resolve("question_" + testcase.safeQuestion() + "_tc_" + (index + 1) + executableName());
+            Files.writeString(sourcePath, buildHarnessSource(answer, testcase.safeInput()), StandardCharsets.UTF_8);
+
+            ProcessResult compileResult = runProcess(
+                    List.of("g++", "-g", "-o", executablePath.getFileName().toString(), sourcePath.getFileName().toString(), "-I", ".", "-std=c++11"),
+                    workspacePath,
+                    COMPILE_TIMEOUT
+            );
+            if (compileResult.timedOut()) {
+                String errorMessage = "tc" + testcaseKey + " compilation timed out.";
+                scores.put(testcaseKey, false);
+                failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, errorMessage));
+                runtimeErrors.add(errorMessage);
+                continue;
+            }
+            if (compileResult.exitCode() != 0) {
+                scores.put(testcaseKey, false);
+                failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, compileResult.stderr()));
+                continue;
+            }
+
+            ProcessResult runResult = runProcess(List.of(executablePath.toAbsolutePath().toString()), workspacePath, TESTCASE_TIMEOUT);
+            if (runResult.timedOut()) {
+                String errorMessage = "tc" + testcaseKey + " execution timed out (limit: 5s)";
+                scores.put(testcaseKey, false);
+                failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, errorMessage));
+                runtimeErrors.add(errorMessage);
+                continue;
+            }
+            if (runResult.exitCode() != 0) {
+                String errorMessage = "tc" + testcaseKey + " exited with code " + runResult.exitCode() + ": " + runResult.stderr().strip();
+                scores.put(testcaseKey, false);
+                failedOutputs.put(testcaseKey, new FailedOutput(testcase.safeExpected(), null, errorMessage));
+                runtimeErrors.add(errorMessage);
+                continue;
+            }
+
+            String normalizedActual = normalizeOutput(runResult.stdout());
+            String normalizedExpected = normalizeOutput(testcase.safeExpected());
+            boolean passed = normalizedActual.equals(normalizedExpected);
+            scores.put(testcaseKey, passed);
+            if (!passed) {
+                failedOutputs.put(testcaseKey, new FailedOutput(truncate(normalizedExpected), truncate(normalizedActual), null));
+            }
+        }
+
+        String runtimeErrorSummary = runtimeErrors.isEmpty() ? null : String.join("\n", runtimeErrors);
+        return new GraderResponse("SUCCESS", scores, failedOutputs, null, runtimeErrorSummary);
+    }
+
+    private String buildHarnessSource(String answer, String testSnippet) {
+        String header = answer.contains("#include")
+                ? ""
+                : "#include <bits/stdc++.h>\nusing namespace std;\n";
+        return header + answer + "\nint main() {\n" + testSnippet + "\nreturn 0;\n}\n";
+    }
+
+    private List<String> findAllCppFiles(Path workspacePath) throws IOException {
+        try (Stream<Path> paths = Files.list(workspacePath)) {
+            return paths
+                    .filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .filter(name -> name.endsWith(".cpp") || name.endsWith(".cc") || name.endsWith(".cxx") || name.endsWith(".c"))
                     .sorted()
                     .toList();
         }
@@ -260,6 +468,41 @@ public class GraderService {
         ProcessBuilder processBuilder = new ProcessBuilder(command);
         processBuilder.directory(workingDirectory.toFile());
         Process process = processBuilder.start();
+
+        CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
+        CompletableFuture<String> stderrFuture = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));
+
+        boolean finished = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        if (!finished) {
+            process.destroyForcibly();
+            return new ProcessResult(
+                    -1,
+                    getProcessOutput(stdoutFuture),
+                    getProcessOutput(stderrFuture),
+                    true
+            );
+        }
+
+        return new ProcessResult(
+                process.exitValue(),
+                getProcessOutput(stdoutFuture),
+                getProcessOutput(stderrFuture),
+                false
+        );
+    }
+
+    private ProcessResult runProcessWithInput(List<String> command, Path workingDirectory, Duration timeout, String input)
+            throws IOException, InterruptedException {
+        ProcessBuilder processBuilder = new ProcessBuilder(command);
+        processBuilder.directory(workingDirectory.toFile());
+        Process process = processBuilder.start();
+
+        try (OutputStream stdin = process.getOutputStream()) {
+            stdin.write((input == null ? "" : input).getBytes(StandardCharsets.UTF_8));
+            if (input == null || !input.endsWith("\n")) {
+                stdin.write('\n');
+            }
+        }
 
         CompletableFuture<String> stdoutFuture = CompletableFuture.supplyAsync(() -> readStream(process.getInputStream()));
         CompletableFuture<String> stderrFuture = CompletableFuture.supplyAsync(() -> readStream(process.getErrorStream()));

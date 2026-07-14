@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import mammoth from "mammoth";
 
 interface Assignment {
   id: string;
@@ -60,6 +61,480 @@ type TeacherTab = "assignments" | "import" | "teachers" | "students" | "analytic
 
 type AssignmentType = "STANDARD" | "FILL_BLANK" | "DEBUGGING" | "PROJECT" | "QUIZ_CODE";
 type GenerationStrategy = "MUTATION" | "BOUNDARY" | "RANDOMIZED" | "PAIRWISE";
+type AssignmentWizardStep = "SETUP" | "CONTENT" | "TESTCASES" | "REVIEW";
+type TestcaseVisibility = "SAMPLE" | "HIDDEN";
+type TestcasePair = {
+  input: string;
+  expected: string;
+  visibility: TestcaseVisibility;
+};
+type QuestionKind = "CODE" | "TEXT" | "SINGLE_CHOICE";
+type AssignmentQuestion = {
+  id: string;
+  title: string;
+  prompt: string;
+  points: number;
+  kind: QuestionKind;
+  starterCode: string;
+  referenceAnswer: string;
+  options: string[];
+  correctOption: number;
+  testcases: TestcasePair[];
+};
+
+type StructuredAssignmentConfig = {
+  version: 1;
+  mode: "QUESTION_SET";
+  questions: AssignmentQuestion[];
+};
+
+const ASSIGNMENT_WIZARD_STEPS: Array<{
+  value: AssignmentWizardStep;
+  title: string;
+  helper: string;
+}> = [
+  { value: "SETUP", title: "Thiết lập", helper: "Thông tin bài" },
+  { value: "CONTENT", title: "Nội dung", helper: "Câu hỏi và đề" },
+  { value: "TESTCASES", title: "Testcase", helper: "Kiểm thử" },
+  { value: "REVIEW", title: "Xem lại", helper: "Kiểm tra cuối" },
+];
+
+const SHOW_ASSIGNMENT_IMPORT_FIELD = false;
+
+const DEFAULT_TESTCASE_PAIRS: TestcasePair[] = [
+  { input: "1", expected: "NO", visibility: "SAMPLE" },
+  { input: "2", expected: "YES", visibility: "SAMPLE" },
+  { input: "9", expected: "NO", visibility: "HIDDEN" },
+  { input: "17", expected: "YES", visibility: "HIDDEN" },
+  { input: "100", expected: "NO", visibility: "HIDDEN" },
+];
+
+const TESTCASE_GROUPS: Array<{
+  visibility: TestcaseVisibility;
+  tone: "sample" | "hidden";
+  title: string;
+  description: string;
+  addLabel: string;
+  emptyLabel: string;
+  moveLabel: string;
+}> = [
+  {
+    visibility: "SAMPLE",
+    tone: "sample",
+    title: "Testcase hiển thị",
+    description: "Sinh viên thấy để tự kiểm tra trước khi nộp.",
+    addLabel: "Thêm",
+    emptyLabel: "Chưa có testcase hiển thị.",
+    moveLabel: "Ẩn testcase",
+  },
+  {
+    visibility: "HIDDEN",
+    tone: "hidden",
+    title: "Testcase chấm ẩn",
+    description: "Chỉ dùng khi chấm điểm, sinh viên không thấy dữ liệu này.",
+    addLabel: "Thêm",
+    emptyLabel: "Chưa có testcase chấm ẩn.",
+    moveLabel: "Cho hiển thị",
+  },
+];
+
+const createTestcasePair = (
+  visibility: TestcaseVisibility = "SAMPLE",
+  input = "",
+  expected = "",
+): TestcasePair => ({
+  input,
+  expected,
+  visibility,
+});
+
+const normalizeTestcasePair = (
+  item: Partial<TestcasePair> | undefined,
+  fallbackVisibility: TestcaseVisibility = "SAMPLE",
+): TestcasePair => {
+  const visibility = item?.visibility === "HIDDEN" ? "HIDDEN" : fallbackVisibility;
+  return {
+    input: String(item?.input || ""),
+    expected: String(item?.expected || ""),
+    visibility,
+  };
+};
+
+const isSampleTestcase = (pair: TestcasePair) => pair.visibility !== "HIDDEN";
+const isTestcaseInGroup = (pair: TestcasePair, visibility: TestcaseVisibility) =>
+  visibility === "SAMPLE" ? isSampleTestcase(pair) : !isSampleTestcase(pair);
+const oppositeTestcaseVisibility = (visibility: TestcaseVisibility): TestcaseVisibility =>
+  visibility === "SAMPLE" ? "HIDDEN" : "SAMPLE";
+
+const padDatePart = (value: number) => String(value).padStart(2, "0");
+
+const todayDateInputValue = () => {
+  const today = new Date();
+  return `${today.getFullYear()}-${padDatePart(today.getMonth() + 1)}-${padDatePart(today.getDate())}`;
+};
+
+const isValidDateParts = (day: number, month: number, year: number) => {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
+
+const formatDateOnly = (value?: string | null) => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  }
+
+  const date = new Date(trimmed);
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()}`;
+};
+
+const formatDateTime = (value?: string | null) => {
+  const date = new Date(String(value || ""));
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+};
+
+const parseDisplayDate = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    return isValidDateParts(day, month, year) ? `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}` : null;
+  }
+
+  const match = trimmed.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (!isValidDateParts(day, month, year)) return null;
+  return `${year}-${padDatePart(month)}-${padDatePart(day)}`;
+};
+
+const createQuestion = (type: AssignmentType, index = 1): AssignmentQuestion => ({
+  id: `${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
+  title: "",
+  prompt: type === "QUIZ_CODE"
+    ? "Chọn đáp án đúng nhất."
+    : "Viết lời giải cho yêu cầu dưới đây.",
+  points: 1,
+  kind: type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE",
+  starterCode: "",
+  referenceAnswer: "",
+  options: ["", "", "", ""],
+  correctOption: 0,
+  testcases: type === "QUIZ_CODE" ? [] : [createTestcasePair("SAMPLE"), createTestcasePair("HIDDEN")],
+});
+
+const normalizeQuestion = (item: Partial<AssignmentQuestion>, index: number, type: AssignmentType): AssignmentQuestion => ({
+  ...createQuestion(type, index + 1),
+  ...item,
+  id: String(item.id || `q-${index + 1}`),
+  title: String(item.title || ""),
+  prompt: String(item.prompt || ""),
+  points: Number(item.points) || 1,
+  kind: (item.kind === "TEXT" || item.kind === "SINGLE_CHOICE" || item.kind === "CODE")
+    ? item.kind
+    : (type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE"),
+  options: Array.from({ length: 4 }, (_, optionIndex) => String(item.options?.[optionIndex] || "")),
+  correctOption: Math.min(3, Math.max(0, Number(item.correctOption) || 0)),
+  testcases: Array.isArray(item.testcases)
+    ? item.testcases.map((pair) => normalizeTestcasePair(pair))
+    : [],
+});
+
+const parseQuestionConfig = (value: string | undefined, type: AssignmentType): AssignmentQuestion[] => {
+  if (!value || !value.trim()) return [createQuestion(type, 1)];
+  try {
+    const parsed = JSON.parse(value) as Partial<StructuredAssignmentConfig> | Partial<AssignmentQuestion>[];
+    const questions = Array.isArray(parsed) ? parsed : parsed.questions;
+    if (Array.isArray(questions) && questions.length > 0) {
+      return questions.map((item, index) => normalizeQuestion(item, index, type));
+    }
+  } catch {
+    // Older assignments stored a plain config string.
+  }
+  return [createQuestion(type, 1)];
+};
+
+const stripMarker = (line: string, marker: string) =>
+  line.replace(new RegExp(`^\\s*${marker}\\s*[:：-]?\\s*`, "i"), "").trim();
+
+const parseOptionLine = (line: string) => {
+  const match = line.match(/^\s*([A-D])[\).:：-]\s*(.+)$/i);
+  return match ? { index: match[1].toUpperCase().charCodeAt(0) - 65, value: match[2].trim() } : null;
+};
+
+const splitQuestionDocument = (content: string, type: AssignmentType): AssignmentQuestion[] => {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [createQuestion(type, 1)];
+
+  const chunks = normalized
+    .split(/(?=^\s*(?:#{1,3}\s*)?(?:Câu|Cau|C\?u|Question)\s+\d+[\).:\-]?\s*)/gim)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
+  const sourceChunks = chunks.length > 0 ? chunks : [normalized];
+
+  return sourceChunks.map((chunk, index) => {
+    const question = createQuestion(type, index + 1);
+    const lines = chunk.split("\n").map((line) => line.trimEnd());
+    const firstLine = lines[0] || `Câu ${index + 1}`;
+    question.title = firstLine.replace(/^#{1,3}\s*/, "").replace(/^(Câu|Cau|C\?u|Question)\s+\d+[\).:\-]?\s*/i, "").trim();
+    question.kind = type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE";
+    question.options = ["", "", "", ""];
+    question.testcases = [];
+
+    const promptLines: string[] = [];
+    let activeSection: "prompt" | "starter" | "answer" | "test" | "expected" = "prompt";
+    let pendingTest = "";
+    let pendingExpected = "";
+
+    const flushTestcase = () => {
+      if (pendingTest.trim() || pendingExpected.trim()) {
+        question.testcases.push(createTestcasePair(question.testcases.length === 0 ? "SAMPLE" : "HIDDEN", pendingTest.trim(), pendingExpected.trim()));
+      }
+      pendingTest = "";
+      pendingExpected = "";
+    };
+
+    for (const rawLine of lines.slice(1)) {
+      const line = rawLine.trim();
+      const option = parseOptionLine(rawLine);
+      if (option) {
+        question.kind = "SINGLE_CHOICE";
+        question.options[option.index] = option.value;
+        activeSection = "prompt";
+        continue;
+      }
+
+      if (/^(Đáp án|Dap an|Answer)\s*[:：-]/i.test(line)) {
+        const value = stripMarker(line, "(Đáp án|Dap an|Answer)");
+        const optionAnswer = value.match(/^[A-D]$/i);
+        if (optionAnswer) {
+          question.correctOption = optionAnswer[0].toUpperCase().charCodeAt(0) - 65;
+          question.kind = "SINGLE_CHOICE";
+        } else {
+          question.referenceAnswer = value;
+          activeSection = "answer";
+        }
+        continue;
+      }
+
+      if (/^(Starter|Starter code|Khung code)\s*[:：-]/i.test(line)) {
+        question.starterCode = stripMarker(line, "(Starter code|Starter|Khung code)");
+        activeSection = "starter";
+        continue;
+      }
+
+      if (/^(Test|Input)\s*[:：-]/i.test(line)) {
+        flushTestcase();
+        pendingTest = stripMarker(line, "(Test|Input)");
+        activeSection = "test";
+        continue;
+      }
+
+      if (/^(Expected|Output|Result)\s*[:：-]/i.test(line)) {
+        pendingExpected = stripMarker(line, "(Expected|Output|Result)");
+        activeSection = "expected";
+        continue;
+      }
+
+      if (/^---+$/.test(line)) {
+        flushTestcase();
+        activeSection = "prompt";
+        continue;
+      }
+
+      if (activeSection === "starter") {
+        question.starterCode += `${question.starterCode ? "\n" : ""}${rawLine}`;
+      } else if (activeSection === "answer") {
+        question.referenceAnswer += `${question.referenceAnswer ? "\n" : ""}${rawLine}`;
+      } else if (activeSection === "test") {
+        pendingTest += `${pendingTest ? "\n" : ""}${rawLine}`;
+      } else if (activeSection === "expected") {
+        pendingExpected += `${pendingExpected ? "\n" : ""}${rawLine}`;
+      } else if (line) {
+        promptLines.push(rawLine);
+      }
+    }
+
+    flushTestcase();
+    question.prompt = promptLines.join("\n").trim() || question.prompt;
+    if (question.kind === "SINGLE_CHOICE") {
+      question.testcases = [];
+    } else if (question.testcases.length === 0) {
+      question.testcases = [createTestcasePair("SAMPLE"), createTestcasePair("HIDDEN")];
+    }
+    return question;
+  });
+};
+
+const serializeQuestionConfig = (questions: AssignmentQuestion[]) =>
+  JSON.stringify({
+    version: 1,
+    mode: "QUESTION_SET",
+    questions,
+  } satisfies StructuredAssignmentConfig);
+
+const questionSetProblem = (questions: AssignmentQuestion[]) =>
+  questions.map((question, index) => [
+    `${index + 1}. ${question.title || `Câu ${index + 1}`}`,
+    question.prompt,
+    question.kind === "SINGLE_CHOICE"
+      ? question.options.map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option}`).join("\n")
+      : "",
+  ].filter(Boolean).join("\n")).join("\n\n");
+
+const questionSetReference = (questions: AssignmentQuestion[]) =>
+  questions.map((question, index) => {
+    const answer = question.kind === "SINGLE_CHOICE"
+      ? `${String.fromCharCode(65 + question.correctOption)}. ${question.options[question.correctOption] || ""}`
+      : question.referenceAnswer;
+    return `${index + 1}. ${question.title || `Câu ${index + 1}`}: ${answer || "Chưa nhập đáp án chuẩn"}`;
+  }).join("\n");
+
+const questionSetTestcases = (questions: AssignmentQuestion[]) =>
+  questions.flatMap((question, questionIndex) =>
+    question.testcases
+      .filter((pair) => pair.input.trim() || pair.expected.trim())
+      .map((pair, testcaseIndex) => ({
+        input: pair.input,
+        expected: pair.expected,
+        question: questionIndex + 1,
+        testcase: testcaseIndex + 1,
+        visibility: pair.visibility,
+      }))
+  );
+
+type TestcaseGroupEditorProps = {
+  pairs: TestcasePair[];
+  keyPrefix: string;
+  inputLabel: string;
+  expectedLabel: string;
+  inputPlaceholder: string;
+  expectedPlaceholder: string;
+  canRemove: boolean;
+  onAdd: (visibility: TestcaseVisibility) => void;
+  onUpdate: <K extends keyof TestcasePair>(index: number, field: K, value: TestcasePair[K]) => void;
+  onRemove: (index: number) => void;
+};
+
+function TestcaseGroupEditor({
+  pairs,
+  keyPrefix,
+  inputLabel,
+  expectedLabel,
+  inputPlaceholder,
+  expectedPlaceholder,
+  canRemove,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: TestcaseGroupEditorProps) {
+  return (
+    <div className="testcase-group-list">
+      {TESTCASE_GROUPS.map((group) => {
+        const groupedTestcases = pairs
+          .map((pair, index) => ({ pair, index }))
+          .filter(({ pair }) => isTestcaseInGroup(pair, group.visibility));
+
+        return (
+          <section className={`testcase-group is-${group.tone}`} key={`${keyPrefix}-${group.visibility}`}>
+            <div className="testcase-group-header">
+              <div className="testcase-group-title">
+                <span className="testcase-status-dot" aria-hidden="true" />
+                <strong>{group.title}</strong>
+              </div>
+              <div className="testcase-group-actions">
+                <span className="testcase-group-count">{groupedTestcases.length} case</span>
+                <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => onAdd(group.visibility)}>
+                  {group.addLabel}
+                </button>
+              </div>
+            </div>
+            {groupedTestcases.length === 0 ? (
+              <div className="testcase-group-empty">{group.emptyLabel}</div>
+            ) : (
+              <div className="question-testcase-table">
+                <div className="testcase-table-header">
+                  <span>{inputLabel}</span>
+                  <span>{expectedLabel}</span>
+                  <span>Thao tác</span>
+                </div>
+                {groupedTestcases.map(({ pair, index }) => (
+                  <div className="question-testcase-row" key={`${keyPrefix}-${group.visibility}-tc-${index}`}>
+                    <label className="testcase-cell">
+                      <span>{inputLabel}</span>
+                      <textarea
+                        className="form-control"
+                        value={pair.input}
+                        onChange={(e) => onUpdate(index, "input", e.target.value)}
+                        rows={2}
+                        placeholder={inputPlaceholder}
+                      />
+                    </label>
+                    <label className="testcase-cell">
+                      <span>{expectedLabel}</span>
+                      <textarea
+                        className="form-control"
+                        value={pair.expected}
+                        onChange={(e) => onUpdate(index, "expected", e.target.value)}
+                        rows={2}
+                        placeholder={expectedPlaceholder}
+                      />
+                    </label>
+                    <div className="testcase-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-compact"
+                        onClick={() => onUpdate(index, "visibility", oppositeTestcaseVisibility(group.visibility))}
+                      >
+                        {group.moveLabel}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-compact"
+                        disabled={!canRemove}
+                        onClick={() => onRemove(index)}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+const readAssignmentImportContent = async (file: File) => {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".zip")) {
+    return `Imported starter archive: ${file.name}`;
+  }
+  if (lowerName.endsWith(".docx")) {
+    const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+    return result.value;
+  }
+  return file.text();
+};
 
 const ASSIGNMENT_TYPES: Array<{ value: AssignmentType; label: string; hint: string }> = [
   { value: "STANDARD", label: "Bài thường", hint: "Nộp mã nguồn và chấm bằng testcase." },
@@ -87,8 +562,41 @@ const GENERATION_STRATEGIES: Array<{ value: GenerationStrategy; label: string; h
   { value: "PAIRWISE", label: "Tổ hợp cặp", hint: "Kết hợp từng cặp tham số quan trọng." },
 ];
 
-const countSeedTestcases = (value: string) =>
-  value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).length;
+const parseTestcasePairs = (value?: string): TestcasePair[] => {
+  if (!value || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => normalizeTestcasePair({
+          input: String(item?.input ?? "").trim(),
+          expected: String(item?.expected ?? item?.output ?? "").trim(),
+          visibility: item?.visibility === "HIDDEN" ? "HIDDEN" : "SAMPLE",
+        }))
+        .filter((item) => item.input || item.expected);
+    }
+  } catch {
+    // Support old plain-text testcase samples.
+  }
+
+  return value.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/\s*(?:->|=>|\|)\s*/);
+      return {
+        input: (parts[0] || "").trim(),
+        expected: (parts.slice(1).join(" ").trim()),
+        visibility: "SAMPLE",
+      };
+    });
+};
+
+const serializeTestcasePairs = (pairs: TestcasePair[]) =>
+  JSON.stringify(pairs.filter((pair) => pair.input.trim() || pair.expected.trim()));
+
+const countSeedTestcases = (pairs: TestcasePair[]) =>
+  pairs.filter((pair) => pair.input.trim() && pair.expected.trim()).length;
 
 const mutateNumber = (raw: string, offset: number, strategy: GenerationStrategy) => {
   const value = Number(raw);
@@ -102,13 +610,16 @@ const mutateNumber = (raw: string, offset: number, strategy: GenerationStrategy)
   return String(value + offset + 1);
 };
 
-const generateTestcases = (samples: string, targetCount: number, strategy: GenerationStrategy) => {
-  const seeds = samples.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+const generateTestcases = (samples: TestcasePair[], targetCount: number, strategy: GenerationStrategy) => {
+  const seeds = samples.filter((pair) => pair.input.trim());
   if (seeds.length === 0 || targetCount <= 0) return [];
   return Array.from({ length: targetCount }, (_, index) => {
     const seed = seeds[index % seeds.length];
-    const mutated = seed.replace(/-?\d+(\.\d+)?/g, (match) => mutateNumber(match, index, strategy));
-    return mutated === seed ? `${seed} # variant ${index + 1}` : mutated;
+    const mutated = seed.input.replace(/-?\d+(\.\d+)?/g, (match) => mutateNumber(match, index, strategy));
+    return {
+      input: mutated === seed.input ? `${seed.input} # variant ${index + 1}` : mutated,
+      expected: "Cần xác nhận",
+    };
   });
 };
 
@@ -155,36 +666,116 @@ const typeConfigPlaceholder = (type: AssignmentType) => {
   return "Ví dụ: time_limit=2s; memory=256MB; public_tests=10.";
 };
 
-const rosterDisplayName = (name: string) => {
-  const normalizedName = name.trim().toLowerCase();
-  if (normalizedName === "default") return "Chưa phân lớp";
-  return name;
-};
-
-const STUDENT_ROSTER_PAGE_SIZE = 5;
-
-const getPaginationItems = (currentPage: number, totalPages: number) => {
-  if (totalPages <= 5) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
+const ASSIGNMENT_FLOW: Record<
+  AssignmentType,
+  {
+    label: string;
+    summary: string;
+    importHint: string;
+    problemLabel: string;
+    problemPlaceholder: string;
+    starterLabel?: string;
+    starterPlaceholder?: string;
+    solutionLabel: string;
+    solutionPlaceholder: string;
+    configLabel: string;
+    configPlaceholder: string;
+    testcaseTitle: string;
+    testcaseHint: string;
+    requireStarter: boolean;
+    requireTestcases: boolean;
+    requirements: string[];
   }
-
-  const visiblePages = new Set(
-    [1, totalPages, currentPage - 1, currentPage, currentPage + 1].filter(
-      (page) => page >= 1 && page <= totalPages
-    )
-  );
-  const sortedPages = Array.from(visiblePages).sort((a, b) => a - b);
-  const items: Array<number | "gap"> = [];
-
-  sortedPages.forEach((page, index) => {
-    if (index > 0 && page - sortedPages[index - 1] > 1) {
-      items.push("gap");
-    }
-    items.push(page);
-  });
-
-  return items;
+> = {
+  STANDARD: {
+    label: "Bài lập trình",
+    summary: "Dùng khi sinh viên nộp source code và hệ thống chấm bằng testcase.",
+    importHint: "Import .md/.txt để điền đề bài, hoặc file code để tham khảo khi viết đề.",
+    problemLabel: "Đề bài cho sinh viên",
+    problemPlaceholder: "Mô tả bài toán, input/output, ràng buộc, ví dụ và yêu cầu nộp.",
+    solutionLabel: "Lời giải tham chiếu",
+    solutionPlaceholder: "Dán lời giải chuẩn để đối chiếu và hỗ trợ sinh testcase.",
+    configLabel: "Cấu hình chấm",
+    configPlaceholder: "Ví dụ: time_limit=2s; memory=256MB; public_tests=10.",
+    testcaseTitle: "Testcase chấm tự động",
+    testcaseHint: "Mỗi dòng là một testcase seed. Có thể import file mẫu rồi sinh thêm biến thể.",
+    requireStarter: false,
+    requireTestcases: true,
+    requirements: ["Đề bài", "Lời giải chuẩn", "Testcase mẫu"],
+  },
+  FILL_BLANK: {
+    label: "Bài đục lỗ",
+    summary: "Dùng khi giảng viên có code hoàn chỉnh/template và muốn sinh phần khuyết cho sinh viên điền.",
+    importHint: "Import code hoàn chỉnh. Nếu có vùng muốn đục thủ công, đánh dấu /* HOLE:start */ ... /* HOLE:end */.",
+    problemLabel: "Yêu cầu ngắn cho sinh viên",
+    problemPlaceholder: "Nêu mục tiêu cần hoàn thiện, hàm/lớp không được đổi và định dạng nộp.",
+    starterLabel: "Code hoàn chỉnh / template để đục lỗ",
+    starterPlaceholder: "Dán code hoàn chỉnh hoặc template có marker HOLE. Hệ thống lưu phần này làm nguồn sinh starter.",
+    solutionLabel: "Đáp án hoàn chỉnh",
+    solutionPlaceholder: "Nếu khác template, dán bản chuẩn cuối cùng để chấm nội bộ.",
+    configLabel: "Quy tắc đục lỗ",
+    configPlaceholder: "Ví dụ: auto_holes=3; preserve_imports=true; required_regions=solve,compare.",
+    testcaseTitle: "Testcase kiểm chứng lỗ trống",
+    testcaseHint: "Testcase nên kiểm chứng đúng phần sinh viên phải điền, không cần quá nhiều cấu hình ngoài luồng.",
+    requireStarter: true,
+    requireTestcases: true,
+    requirements: ["Template/code hoàn chỉnh", "Quy tắc đục lỗ", "Testcase kiểm chứng"],
+  },
+  DEBUGGING: {
+    label: "Bài sửa lỗi",
+    summary: "Dùng khi sinh viên nhận code lỗi và phải sửa để vượt testcase.",
+    importHint: "Import file code lỗi. Lời giải đã sửa nhập ở vùng đáp án chuẩn.",
+    problemLabel: "Hành vi đúng mong muốn",
+    problemPlaceholder: "Mô tả output đúng, điều kiện biên và phần API sinh viên không được thay đổi.",
+    starterLabel: "Code lỗi giao cho sinh viên",
+    starterPlaceholder: "Dán code đang lỗi. Giữ nguyên public API nếu testcase phụ thuộc vào tên hàm/lớp.",
+    solutionLabel: "Code đã sửa / lời giải chuẩn",
+    solutionPlaceholder: "Dán bản đã sửa đúng để làm chuẩn đối chiếu.",
+    configLabel: "Mô tả lỗi cần bắt",
+    configPlaceholder: "Ví dụ: off-by-one ở biên phải; sai khi input rỗng; không xử lý số âm.",
+    testcaseTitle: "Testcase bắt lỗi",
+    testcaseHint: "Ưu tiên testcase lộ rõ bug, nhất là input biên và trường hợp từng làm code lỗi fail.",
+    requireStarter: true,
+    requireTestcases: true,
+    requirements: ["Code lỗi", "Mô tả lỗi", "Code đã sửa", "Testcase bắt lỗi"],
+  },
+  PROJECT: {
+    label: "Mini project",
+    summary: "Dùng cho bài nhiều file, starter project, rubric và test tích hợp.",
+    importHint: "Import .zip hoặc mô tả cây thư mục/starter files. Nếu browser không đọc được zip, tên file vẫn giúp ghi nhận nguồn import.",
+    problemLabel: "Brief dự án",
+    problemPlaceholder: "Mục tiêu dự án, tính năng bắt buộc, cách nộp, cấu trúc thư mục mong muốn.",
+    starterLabel: "Starter project / cấu trúc thư mục",
+    starterPlaceholder: "Dán cây thư mục, README starter, hoặc nội dung file chính.",
+    solutionLabel: "Ghi chú nghiệm thu / lời giải mẫu",
+    solutionPlaceholder: "Mô tả hành vi bản mẫu, checklist nghiệm thu hoặc link/nội dung solution nội bộ.",
+    configLabel: "Rubric / tiêu chí chấm",
+    configPlaceholder: "Ví dụ: 60% testcase, 20% kiến trúc, 20% báo cáo; bắt buộc có README và script chạy.",
+    testcaseTitle: "Smoke / integration tests",
+    testcaseHint: "Dán các input kiểm thử nhanh, script smoke test hoặc mô tả test tích hợp.",
+    requireStarter: true,
+    requireTestcases: false,
+    requirements: ["Brief dự án", "Starter project", "Rubric", "Smoke tests"],
+  },
+  QUIZ_CODE: {
+    label: "Quiz code",
+    summary: "Dùng cho câu hỏi ngắn về đọc hiểu code, chọn đáp án hoặc điền kết quả.",
+    importHint: "Import prompt hoặc snippet code để đưa vào câu hỏi.",
+    problemLabel: "Câu hỏi / snippet code",
+    problemPlaceholder: "Dán câu hỏi, đoạn code, các lựa chọn A/B/C/D nếu có.",
+    solutionLabel: "Đáp án và giải thích",
+    solutionPlaceholder: "Ghi đáp án đúng và giải thích ngắn để phản hồi cho sinh viên.",
+    configLabel: "Cấu hình quiz",
+    configPlaceholder: "Ví dụ: single-choice; shuffle=false; time_limit=10m; points=1.",
+    testcaseTitle: "Kiểm chứng tùy chọn",
+    testcaseHint: "Quiz thường không cần testcase. Chỉ dùng khi câu hỏi yêu cầu chạy code với input cụ thể.",
+    requireStarter: false,
+    requireTestcases: false,
+    requirements: ["Câu hỏi", "Đáp án", "Cấu hình quiz"],
+  },
 };
+
+const getAssignmentFlow = (type: AssignmentType) => ASSIGNMENT_FLOW[type] || ASSIGNMENT_FLOW.STANDARD;
 
 export default function TeacherDashboard() {
   const router = useRouter();
@@ -196,6 +787,7 @@ export default function TeacherDashboard() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
+  const [assignmentWizardStep, setAssignmentWizardStep] = useState<AssignmentWizardStep>("SETUP");
   const [user, setUser] = useState<TeacherUser | null>(null);
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -208,7 +800,6 @@ export default function TeacherDashboard() {
   const [classRosters, setClassRosters] = useState<ClassRoster[]>([]);
   const [classSection, setClassSection] = useState("");
   const [selectedClassName, setSelectedClassName] = useState("");
-  const [studentRosterPage, setStudentRosterPage] = useState(1);
   const [coTeachers, setCoTeachers] = useState<string[]>([
     "lan.nt@hust.edu.vn",
     "hung.pv@hust.edu.vn",
@@ -218,16 +809,23 @@ export default function TeacherDashboard() {
   const [newType, setNewType] = useState<AssignmentType>("STANDARD");
   const [newStart, setNewStart] = useState("");
   const [newEnd, setNewEnd] = useState("");
+  const [newStartDisplay, setNewStartDisplay] = useState("");
+  const [newEndDisplay, setNewEndDisplay] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [problemStatement, setProblemStatement] = useState("");
   const [starterCode, setStarterCode] = useState("");
   const [referenceSolution, setReferenceSolution] = useState("");
   const [typeConfig, setTypeConfig] = useState("");
+  const [questionItems, setQuestionItems] = useState<AssignmentQuestion[]>([createQuestion("STANDARD", 1)]);
+  const questionListRef = useRef<HTMLDivElement | null>(null);
+  const pendingQuestionFocusIdRef = useRef<string | null>(null);
   const [languages, setLanguages] = useState<string[]>(["cpp"]);
   const [generationStrategy, setGenerationStrategy] = useState<GenerationStrategy>("MUTATION");
-  const [sampleTestcases, setSampleTestcases] = useState("1 2\n5 8\n10 20");
+  const [testcasePairs, setTestcasePairs] = useState<TestcasePair[]>(DEFAULT_TESTCASE_PAIRS);
   const [generatedCount, setGeneratedCount] = useState(20);
   const [teacherEmail, setTeacherEmail] = useState("");
+  const [studentForm, setStudentForm] = useState({ mssv: "", name: "", email: "" });
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -278,7 +876,7 @@ export default function TeacherDashboard() {
       return { dateLabel: "Không giới hạn", helper: "Mở" };
     }
 
-    const dateLabel = new Date(assignment.end_date).toLocaleDateString("vi-VN");
+    const dateLabel = formatDateOnly(assignment.end_date);
     const diffMs = endTime - assignmentStatusNow;
     if (diffMs < 0) {
       return { dateLabel, helper: "Đóng" };
@@ -287,19 +885,108 @@ export default function TeacherDashboard() {
     const diffDays = Math.ceil(diffMs / 86400000);
     return { dateLabel, helper: diffDays <= 1 ? "Hôm nay" : `${diffDays} ngày` };
   };
-  const seedCount = countSeedTestcases(sampleTestcases);
-  const generatedPreview = generateTestcases(sampleTestcases, Math.min(generatedCount, 8), generationStrategy);
-  const activeRosterStudents = classRosters.find((roster) => roster.name === selectedClassName)?.students || students;
-  const studentRosterTotalPages = Math.max(1, Math.ceil(activeRosterStudents.length / STUDENT_ROSTER_PAGE_SIZE));
-  const currentStudentRosterPage = Math.min(studentRosterPage, studentRosterTotalPages);
-  const studentRosterStartIndex = (currentStudentRosterPage - 1) * STUDENT_ROSTER_PAGE_SIZE;
-  const pagedRosterStudents = activeRosterStudents.slice(
-    studentRosterStartIndex,
-    studentRosterStartIndex + STUDENT_ROSTER_PAGE_SIZE
+  const seedCount = countSeedTestcases(testcasePairs);
+  const generatedPreview = generateTestcases(testcasePairs, Math.min(generatedCount, 8), generationStrategy);
+  const assignmentFlow = getAssignmentFlow(newType);
+  const isQuestionSetAssignment = newType === "STANDARD" || newType === "QUIZ_CODE";
+  const activeQuestions = isQuestionSetAssignment ? questionItems : [];
+  const questionTestcases = questionSetTestcases(activeQuestions);
+  const questionSampleCount = activeQuestions.reduce(
+    (sum, question) => sum + question.testcases.filter((pair) => isSampleTestcase(pair) && (pair.input.trim() || pair.expected.trim())).length,
+    0,
   );
-  const studentRosterFrom = activeRosterStudents.length === 0 ? 0 : studentRosterStartIndex + 1;
-  const studentRosterTo = Math.min(studentRosterStartIndex + STUDENT_ROSTER_PAGE_SIZE, activeRosterStudents.length);
-  const studentRosterPageItems = getPaginationItems(currentStudentRosterPage, studentRosterTotalPages);
+  const questionHiddenCount = activeQuestions.reduce(
+    (sum, question) => sum + question.testcases.filter((pair) => !isSampleTestcase(pair) && (pair.input.trim() || pair.expected.trim())).length,
+    0,
+  );
+  const questionGeneratedPreview = generateTestcases(questionTestcases, Math.min(generatedCount, 8), generationStrategy);
+  const assignmentWizardStepIndex = Math.max(0, ASSIGNMENT_WIZARD_STEPS.findIndex((step) => step.value === assignmentWizardStep));
+  const isLastWizardStep = assignmentWizardStepIndex === ASSIGNMENT_WIZARD_STEPS.length - 1;
+
+  const normalizeAssignmentDates = () => {
+    const parsedStart = parseDisplayDate(newStart || newStartDisplay);
+    const parsedEnd = parseDisplayDate(newEnd || newEndDisplay);
+    if (!parsedStart || !parsedEnd) {
+      alert("Vui lòng chọn ngày bắt đầu và hạn nộp.");
+      return null;
+    }
+
+    setNewStart(parsedStart);
+    setNewEnd(parsedEnd);
+    setNewStartDisplay(formatDateOnly(parsedStart));
+    setNewEndDisplay(formatDateOnly(parsedEnd));
+    return { startDate: parsedStart, endDate: parsedEnd };
+  };
+
+  const validateWizardStep = (step: AssignmentWizardStep) => {
+    if (step === "SETUP") {
+      if (!newTitle.trim()) {
+        alert("Vui lòng nhập tên bài tập.");
+        return false;
+      }
+      return Boolean(normalizeAssignmentDates());
+    }
+
+    if (step === "CONTENT") {
+      const flow = getAssignmentFlow(newType);
+      if (isQuestionSetAssignment && !questionItems.some((question) => question.prompt.trim())) {
+        alert("Vui lòng nhập ít nhất một câu hỏi.");
+        return false;
+      }
+      if (newType === "QUIZ_CODE" && questionItems.some((question) => question.options.some((option) => !option.trim()))) {
+        alert("Mỗi câu trắc nghiệm cần đủ 4 đáp án.");
+        return false;
+      }
+      if (!isQuestionSetAssignment && !problemStatement.trim()) {
+        alert(`Vui lòng nhập ${flow.problemLabel.toLowerCase()}.`);
+        return false;
+      }
+      if (!isQuestionSetAssignment && flow.requireStarter && !starterCode.trim()) {
+        alert(`Vui lòng nhập ${flow.starterLabel?.toLowerCase() || "starter/template"}.`);
+        return false;
+      }
+      if (!isQuestionSetAssignment && !referenceSolution.trim()) {
+        alert(`Vui lòng nhập ${flow.solutionLabel.toLowerCase()}.`);
+        return false;
+      }
+      if (!isQuestionSetAssignment && !typeConfig.trim()) {
+        alert(`Vui lòng nhập ${flow.configLabel.toLowerCase()}.`);
+        return false;
+      }
+    }
+
+    if (step === "TESTCASES" && !isQuestionSetAssignment && assignmentFlow.requireTestcases && seedCount === 0) {
+      alert("Vui lòng nhập hoặc import ít nhất một testcase mẫu.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const goToNextWizardStep = () => {
+    const nextStep = ASSIGNMENT_WIZARD_STEPS[assignmentWizardStepIndex + 1]?.value;
+    if (nextStep) setAssignmentWizardStep(nextStep);
+  };
+
+  const goToPreviousWizardStep = () => {
+    const previousStep = ASSIGNMENT_WIZARD_STEPS[assignmentWizardStepIndex - 1]?.value;
+    if (previousStep) setAssignmentWizardStep(previousStep);
+  };
+
+  useEffect(() => {
+    const focusId = pendingQuestionFocusIdRef.current;
+    if (!focusId || !isQuestionSetAssignment) return;
+
+    pendingQuestionFocusIdRef.current = null;
+    window.requestAnimationFrame(() => {
+      const cards = Array.from(questionListRef.current?.querySelectorAll<HTMLElement>("[data-question-id]") || []);
+      const targetCard = cards.find((card) => card.dataset.questionId === focusId) || cards[cards.length - 1];
+      targetCard?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        targetCard?.querySelector<HTMLInputElement | HTMLTextAreaElement>(".form-control")?.focus();
+      }, 180);
+    });
+  }, [questionItems.length, isQuestionSetAssignment]);
 
   useEffect(() => {
     setAssignmentStatusNow(Date.now());
@@ -315,7 +1002,7 @@ export default function TeacherDashboard() {
 
     const parsedUser = JSON.parse(storedUser) as TeacherUser;
     if (parsedUser.role !== "TEACHER") {
-      router.push("/student");
+      router.push("/login");
       return;
     }
 
@@ -331,10 +1018,6 @@ export default function TeacherDashboard() {
       fetchAnalytics(selectedAssignmentId);
     }
   }, [selectedAssignmentId, activeTab]);
-
-  useEffect(() => {
-    setStudentRosterPage(1);
-  }, [selectedAssignmentId, selectedClassName]);
 
   const fetchAssignments = async (token?: string) => {
     const activeToken = token || localStorage.getItem("trs_token");
@@ -373,7 +1056,6 @@ export default function TeacherDashboard() {
         setStudents(data.student_list || []);
         const rosters = data.class_rosters || [];
         setClassRosters(rosters);
-        setStudentRosterPage(1);
         if (rosters.length > 0 && !rosters.some((roster: ClassRoster) => roster.name === selectedClassName)) {
           setSelectedClassName(rosters[0].name);
         }
@@ -406,18 +1088,23 @@ export default function TeacherDashboard() {
   };
 
   const resetAssignmentForm = () => {
+    const today = todayDateInputValue();
+    setAssignmentWizardStep("SETUP");
     setNewTitle("");
     setNewType("STANDARD");
-    setNewStart("");
-    setNewEnd("");
+    setNewStart(today);
+    setNewEnd(today);
+    setNewStartDisplay(formatDateOnly(today));
+    setNewEndDisplay(formatDateOnly(today));
     setNewDesc("");
     setProblemStatement("");
     setStarterCode("");
     setReferenceSolution("");
     setTypeConfig("");
+    setQuestionItems([createQuestion("STANDARD", 1)]);
     setLanguages(["cpp"]);
     setGenerationStrategy("MUTATION");
-    setSampleTestcases("1 2\n5 8\n10 20");
+    setTestcasePairs(DEFAULT_TESTCASE_PAIRS);
     setGeneratedCount(20);
     setEditingAssignmentId(null);
     if (testcaseInputRef.current) testcaseInputRef.current.value = "";
@@ -429,44 +1116,77 @@ export default function TeacherDashboard() {
   };
 
   const openEditAssignment = (assignment: Assignment) => {
+    setAssignmentWizardStep("SETUP");
     setEditingAssignmentId(assignment.id);
     setNewTitle(assignment.name || "");
     setNewType(assignment.assignment_type || "STANDARD");
-    setNewStart((assignment.start_date || "").slice(0, 10));
-    setNewEnd((assignment.end_date || "").slice(0, 10));
+    const startDate = (assignment.start_date || "").slice(0, 10);
+    const endDate = (assignment.end_date || "").slice(0, 10);
+    setNewStart(startDate);
+    setNewEnd(endDate);
+    setNewStartDisplay(formatDateOnly(startDate));
+    setNewEndDisplay(formatDateOnly(endDate));
     setNewDesc(assignment.description || "");
     setProblemStatement(assignment.problem_statement || "");
     setStarterCode(assignment.starter_code || "");
     setReferenceSolution(assignment.reference_solution || "");
     setTypeConfig(assignment.type_config || "");
+    setQuestionItems(parseQuestionConfig(assignment.type_config, assignment.assignment_type || "STANDARD"));
     setLanguages(assignment.supported_languages?.length ? assignment.supported_languages : ["cpp"]);
     setGenerationStrategy(assignment.testcase_generation_strategy || "MUTATION");
-    setSampleTestcases(assignment.testcase_samples || "");
+    setTestcasePairs(parseTestcasePairs(assignment.testcase_samples));
     setGeneratedCount(assignment.generated_testcase_count || 0);
     setIsModalOpen(true);
   };
 
-  const assignmentPayload = () => ({
+  const assignmentPayload = (startDate = newStart, endDate = newEnd) => ({
     name: newTitle,
     description: newDesc,
     assignment_type: newType,
     supported_languages: languages.join(","),
-    testcase_samples: sampleTestcases,
+    testcase_samples: isQuestionSetAssignment ? JSON.stringify(questionTestcases) : serializeTestcasePairs(testcasePairs),
     testcase_generation_strategy: generationStrategy,
-    testcase_seed_count: seedCount,
+    testcase_seed_count: isQuestionSetAssignment ? questionTestcases.length : seedCount,
     generated_testcase_count: Math.max(0, generatedCount),
-    problem_statement: problemStatement,
-    starter_code: starterCode,
-    reference_solution: referenceSolution,
-    type_config: typeConfig,
-    start_date: newStart,
-    end_date: newEnd,
+    problem_statement: isQuestionSetAssignment ? questionSetProblem(activeQuestions) : problemStatement,
+    starter_code: isQuestionSetAssignment ? activeQuestions.map((question) => question.starterCode).filter(Boolean).join("\n\n") : starterCode,
+    reference_solution: isQuestionSetAssignment ? questionSetReference(activeQuestions) : referenceSolution,
+    type_config: isQuestionSetAssignment ? serializeQuestionConfig(activeQuestions) : typeConfig,
+    start_date: startDate,
+    end_date: endDate,
   });
 
-  const handleAddAssignment = async (e: FormEvent) => {
+  const handleAssignmentFormSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (assignmentWizardStep !== "REVIEW") {
+      goToNextWizardStep();
+    }
+  };
+
+  const handleAddAssignment = async () => {
+    if (assignmentWizardStep !== "REVIEW") return;
     const token = localStorage.getItem("trs_token");
-    if (!token || !newTitle || !newStart || !newEnd) return;
+    if (!token) return;
+
+    if (!newTitle.trim()) {
+      setAssignmentWizardStep("SETUP");
+      alert("Vui lòng nhập tên bài tập.");
+      return;
+    }
+
+    const normalizedDates = normalizeAssignmentDates();
+    if (!normalizedDates) {
+      setAssignmentWizardStep("SETUP");
+      return;
+    }
+    if (!validateWizardStep("CONTENT")) {
+      setAssignmentWizardStep("CONTENT");
+      return;
+    }
+    if (!validateWizardStep("TESTCASES")) {
+      setAssignmentWizardStep("TESTCASES");
+      return;
+    }
 
     try {
       const response = await fetch(editingAssignmentId ? `/api/assignments/${editingAssignmentId}` : "/api/assignments", {
@@ -475,12 +1195,12 @@ export default function TeacherDashboard() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(assignmentPayload()),
+        body: JSON.stringify(assignmentPayload(normalizedDates.startDate, normalizedDates.endDate)),
       });
 
       if (!response.ok) {
         const errData = await response.json();
-        alert(errData.error || "Không thể tạo bài tập.");
+        alert(errData.error || "Không thể tạo bài tập lớn.");
         return;
       }
 
@@ -529,13 +1249,98 @@ export default function TeacherDashboard() {
   const handleTestcaseFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setSampleTestcases(await file.text());
+    setTestcasePairs(parseTestcasePairs(await file.text()));
+  };
+
+  const updateTestcasePair = <K extends keyof TestcasePair>(index: number, field: K, value: TestcasePair[K]) => {
+    setTestcasePairs((current) => current.map((pair, pairIndex) =>
+      pairIndex === index ? { ...pair, [field]: value } : pair
+    ));
+  };
+
+  const addTestcasePair = (visibility: TestcaseVisibility = "HIDDEN") => {
+    setTestcasePairs((current) => [...current, createTestcasePair(visibility)]);
+  };
+
+  const removeTestcasePair = (index: number) => {
+    setTestcasePairs((current) => current.length <= 1 ? current : current.filter((_, pairIndex) => pairIndex !== index));
+  };
+
+  const addQuestionItem = () => {
+    setQuestionItems((current) => {
+      const nextQuestion = createQuestion(newType, current.length + 1);
+      pendingQuestionFocusIdRef.current = nextQuestion.id;
+      return [...current, nextQuestion];
+    });
+  };
+
+  const removeQuestionItem = (index: number) => {
+    setQuestionItems((current) => current.length <= 1 ? current : current.filter((_, questionIndex) => questionIndex !== index));
+  };
+
+  const updateQuestionItem = <K extends keyof AssignmentQuestion>(index: number, field: K, value: AssignmentQuestion[K]) => {
+    setQuestionItems((current) => current.map((question, questionIndex) =>
+      questionIndex === index ? { ...question, [field]: value } : question
+    ));
+  };
+
+  const updateQuestionOption = (questionIndex: number, optionIndex: number, value: string) => {
+    setQuestionItems((current) => current.map((question, index) => {
+      if (index !== questionIndex) return question;
+      const options = [...question.options];
+      options[optionIndex] = value;
+      return { ...question, options };
+    }));
+  };
+
+  const updateQuestionTestcase = <K extends keyof TestcasePair>(
+    questionIndex: number,
+    testcaseIndex: number,
+    field: K,
+    value: TestcasePair[K],
+  ) => {
+    setQuestionItems((current) => current.map((question, index) => {
+      if (index !== questionIndex) return question;
+      const testcases = question.testcases.map((pair, pairIndex) =>
+        pairIndex === testcaseIndex ? { ...pair, [field]: value } : pair
+      );
+      return { ...question, testcases };
+    }));
+  };
+
+  const addQuestionTestcase = (questionIndex: number, visibility: TestcaseVisibility = "HIDDEN") => {
+    setQuestionItems((current) => current.map((question, index) =>
+      index === questionIndex
+        ? { ...question, testcases: [...question.testcases, createTestcasePair(visibility)] }
+        : question
+    ));
+  };
+
+  const removeQuestionTestcase = (questionIndex: number, testcaseIndex: number) => {
+    setQuestionItems((current) => current.map((question, index) =>
+      index === questionIndex
+        ? { ...question, testcases: question.testcases.length <= 1 ? question.testcases : question.testcases.filter((_, pairIndex) => pairIndex !== testcaseIndex) }
+        : question
+    ));
   };
 
   const handleAssignmentFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const content = await file.text();
+    const content = await readAssignmentImportContent(file);
+    if ((newType === "STANDARD" || newType === "QUIZ_CODE") && file.name.toLowerCase().endsWith(".json")) {
+      const importedQuestions = parseQuestionConfig(content, newType);
+      setQuestionItems(importedQuestions.length ? importedQuestions : [createQuestion(newType, 1)]);
+      if (!newTitle.trim()) setNewTitle(file.name.replace(/\.[^.]+$/, ""));
+      return;
+    }
+    if (newType === "STANDARD" || newType === "QUIZ_CODE") {
+      const importedQuestions = splitQuestionDocument(content, newType);
+      setQuestionItems(importedQuestions.length ? importedQuestions : [createQuestion(newType, 1)]);
+      if (!newTitle.trim()) setNewTitle(file.name.replace(/\.[^.]+$/, ""));
+      if (!newDesc.trim()) setNewDesc(`Import từ file ${file.name}`);
+      return;
+    }
     if (newType === "FILL_BLANK" || newType === "DEBUGGING" || newType === "PROJECT") {
       setStarterCode(content);
       if (!problemStatement.trim()) setProblemStatement(`File bài tập: ${file.name}`);
@@ -590,6 +1395,55 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleAddStudent = async (e: FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem("trs_token");
+    if (!token || !selectedAssignmentId || isAddingStudent) return;
+
+    const mssv = studentForm.mssv.trim();
+    const email = studentForm.email.trim();
+    const name = studentForm.name.trim();
+    if (!mssv || !email) {
+      setUploadMessage("");
+      setUploadError("Vui long nhap MSSV va email sinh vien.");
+      return;
+    }
+
+    setIsAddingStudent(true);
+    setUploadMessage("");
+    setUploadError("");
+
+    try {
+      const response = await fetch("/api/students", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          assignment_id: selectedAssignmentId,
+          class_section: classSection.trim() || "Default",
+          mssv,
+          name,
+          email,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUploadMessage(`Da them sinh vien ${email} vao lop ${data.class_section || classSection || "Default"}.`);
+        setStudentForm({ mssv: "", name: "", email: "" });
+        fetchStudents(selectedAssignmentId);
+      } else {
+        setUploadError(data.error || "Khong the them sinh vien.");
+      }
+    } catch {
+      setUploadError("Loi ket noi may chu khi them sinh vien.");
+    } finally {
+      setIsAddingStudent(false);
+    }
+  };
+
   const logout = () => {
     localStorage.clear();
     router.push("/login");
@@ -605,8 +1459,8 @@ export default function TeacherDashboard() {
             TRS <span className="logo-badge">Rebuild</span>
           </Link>
           <div className="teacher-header-actions">
-            <span>
-              Giảng viên: <strong>{user?.name || "Teacher"}</strong>
+            <span style={{ fontSize: "0.9rem", color: "hsl(var(--text-secondary))" }}>
+              Chào giảng viên: <strong>{user?.name || "Teacher"}</strong>
             </span>
             <button onClick={logout} className="btn btn-danger">
               Đăng xuất
@@ -632,9 +1486,9 @@ export default function TeacherDashboard() {
             <div className="sidebar-title">Menu quản lý</div>
           </div>
           <nav className="sidebar-nav">
-            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Quản lý bài tập">
+            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Quản lý bài tập lớn">
               <span className="sidebar-icon assignment" aria-hidden="true"></span>
-              <span className="sidebar-label">Quản lý bài tập</span>
+              <span className="sidebar-label">Quản lý bài tập lớn</span>
             </button>
             <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "import" ? "active" : ""}`} onClick={() => setActiveTab("import")} title="Đăng ký sinh viên">
               <span className="sidebar-icon import" aria-hidden="true"></span>
@@ -653,16 +1507,6 @@ export default function TeacherDashboard() {
               <span className="sidebar-label">Thống kê survey</span>
             </button>
           </nav>
-          <div className="sidebar-account">
-            <div className="sidebar-user-card">
-              <span>Giảng viên</span>
-              <strong>{user?.name || "Teacher"}</strong>
-            </div>
-            <button type="button" className="sidebar-logout-button" onClick={logout} title="Đăng xuất">
-              <span className="sidebar-logout-icon" aria-hidden="true"></span>
-              <span className="sidebar-label">Đăng xuất</span>
-            </button>
-          </div>
         </aside>
 
         <main className="content-area">
@@ -671,14 +1515,14 @@ export default function TeacherDashboard() {
               <div className="teacher-page-toolbar teacher-assignment-toolbar">
                 <div>
                   <span className="teacher-assignment-eyebrow">Assignment studio</span>
-                  <h1>Bài tập</h1>
+                  <h1>Bài tập lớn</h1>
                 </div>
                 <button className="btn btn-primary" onClick={openCreateAssignment}>
                   Tạo bài tập
                 </button>
               </div>
 
-              <section className="teacher-assignment-stats" aria-label="Tổng quan bài tập">
+              <section className="teacher-assignment-stats" aria-label="Tổng quan bài tập lớn">
                 <div>
                   <span>Tất cả</span>
                   <strong>{assignments.length}</strong>
@@ -697,18 +1541,18 @@ export default function TeacherDashboard() {
                 </div>
               </section>
 
-              <section className="teacher-metrics-table-card" aria-label="Tổng quan bài tập" style={{ display: "none" }}>
+              <section className="teacher-metrics-table-card" aria-label="Tổng quan bài tập lớn" style={{ display: "none" }}>
                 <div className="teacher-metrics-header">
                   <div>
                     <h2>Tổng quan bài tập</h2>
-                    <p>Các chỉ số chính của kho bài tập.</p>
+                    <p>Các chỉ số chính của kho bài tập lớn.</p>
                   </div>
                 </div>
                 <div className="teacher-metrics-chunks">
                   <div className="teacher-metric-tile">
                     <span>Tổng bài</span>
                     <strong>{assignments.length}</strong>
-                    <small>Bài tập đã tạo</small>
+                    <small>Bài tập lớn đã tạo</small>
                   </div>
                   <div className="teacher-metric-tile">
                     <span>Dạng bài</span>
@@ -736,7 +1580,7 @@ export default function TeacherDashboard() {
               </div>
 
               <div className="assignment-workbench teacher-assignment-workspace">
-                <section className="teacher-assignment-list-panel" aria-label="Danh sách bài tập">
+                <section className="teacher-assignment-list-panel" aria-label="Danh sách bài tập lớn">
                   <div className="teacher-assignment-list-header">
                     <div>
                       <h2>Danh sách</h2>
@@ -799,7 +1643,7 @@ export default function TeacherDashboard() {
                     )}
                     {!isLoadingAsms && filteredAssignments.length === 0 && (
                       <div className="assignment-list-state">
-                        {assignments.length === 0 ? "Chưa có bài tập nào." : "Không tìm thấy bài tập phù hợp."}
+                        {assignments.length === 0 ? "Chưa có bài tập lớn nào." : "Không tìm thấy bài tập phù hợp."}
                       </div>
                     )}
                     {!isLoadingAsms && filteredAssignments.map((asm) => {
@@ -827,7 +1671,7 @@ export default function TeacherDashboard() {
                   </div>
                 </section>
 
-                <section className="assignment-detail-panel teacher-assignment-detail-panel" aria-label="Chi tiết bài tập">
+                <section className="assignment-detail-panel teacher-assignment-detail-panel" aria-label="Chi tiết bài tập lớn">
                   {selectedAssignment ? (
                     (() => {
                       const selectedStatus = getAssignmentStatus(selectedAssignment);
@@ -885,15 +1729,12 @@ export default function TeacherDashboard() {
                           <div>
                             <h3>Lớp học</h3>
                           </div>
+                          <span className="panel-count-pill">{students.length} sinh viên</span>
                         </div>
                         <div className="assignment-people-grid">
                           <div className="people-tool">
-                            <div className="people-tool-heading">
-                              <h4>Lớp</h4>
-                              <span>Import danh sách sinh viên</span>
-                            </div>
                             <div className="form-group">
-                              <label className="form-label">Tên lớp</label>
+                              <label className="form-label">Lớp</label>
                               <input
                                 className="form-control"
                                 value={classSection}
@@ -901,6 +1742,34 @@ export default function TeacherDashboard() {
                                 placeholder="IT3180-01"
                               />
                             </div>
+                            <h4>Sinh viên</h4>
+                            <form onSubmit={handleAddStudent} className="student-quick-form">
+                              <div className="student-quick-grid">
+                                <input
+                                  className="form-control"
+                                  placeholder="MSSV"
+                                  value={studentForm.mssv}
+                                  onChange={(e) => setStudentForm((current) => ({ ...current, mssv: e.target.value }))}
+                                />
+                                <input
+                                  className="form-control"
+                                  placeholder="Ho ten"
+                                  value={studentForm.name}
+                                  onChange={(e) => setStudentForm((current) => ({ ...current, name: e.target.value }))}
+                                />
+                                <input
+                                  type="email"
+                                  className="form-control"
+                                  placeholder="email@sis.hust.edu.vn"
+                                  value={studentForm.email}
+                                  onChange={(e) => setStudentForm((current) => ({ ...current, email: e.target.value }))}
+                                />
+                              </div>
+                              <button type="submit" className="btn btn-secondary" disabled={isAddingStudent || !selectedAssignmentId}>
+                                {isAddingStudent ? "Dang them..." : "Them sinh vien"}
+                              </button>
+                            </form>
+                            <div className="people-tool-divider"><span>hoac import danh sach</span></div>
                             <input
                               type="file"
                               accept=".csv,.xlsx,.xls"
@@ -918,10 +1787,7 @@ export default function TeacherDashboard() {
                             </button>
                           </div>
                           <div className="people-tool">
-                            <div className="people-tool-heading">
-                              <h4>Cộng tác</h4>
-                              <span>Giảng viên hỗ trợ</span>
-                            </div>
+                            <h4>Cộng tác</h4>
                             <form onSubmit={handleAddTeacher} className="compact-inline-form">
                               <input
                                 type="email"
@@ -941,86 +1807,37 @@ export default function TeacherDashboard() {
                         {uploadMessage && <div className="notice success">{uploadMessage}</div>}
                         {uploadError && <div className="notice danger">{uploadError}</div>}
                         <div className="student-mini-table">
-                          <div className="student-roster-card">
-                            <div className="student-roster-header">
-                              <div>
-                                <h4>Danh sách sinh viên</h4>
-                                <p>{classRosters.length > 0 ? "Theo lớp đã chọn" : "Toàn bộ sinh viên"}</p>
-                              </div>
-                              {!isLoadingStudents && students.length > 0 && (
-                                <span>{activeRosterStudents.length} sinh viên</span>
-                              )}
+                          {isLoadingStudents && <p>Đang tải danh sách sinh viên...</p>}
+                          {!isLoadingStudents && students.length === 0 && <p>Chưa có sinh viên trong bài tập này.</p>}
+                          {!isLoadingStudents && classRosters.length > 0 && (
+                            <div className="class-roster-tabs">
+                              {classRosters.map((roster) => (
+                                <button
+                                  key={roster.name}
+                                  className={selectedClassName === roster.name ? "active" : ""}
+                                  onClick={() => setSelectedClassName(roster.name)}
+                                >
+                                  {roster.name} <span>{roster.student_count}</span>
+                                </button>
+                              ))}
                             </div>
-                            {isLoadingStudents && <p className="student-roster-state">Đang tải danh sách sinh viên...</p>}
-                            {!isLoadingStudents && students.length === 0 && <p className="student-roster-state">Chưa có sinh viên trong bài tập này.</p>}
-                            {!isLoadingStudents && classRosters.length > 0 && (
-                              <div className="class-roster-tabs">
-                                {classRosters.map((roster) => (
-                                  <button
-                                    key={roster.name}
-                                    className={selectedClassName === roster.name ? "active" : ""}
-                                    onClick={() => {
-                                      setSelectedClassName(roster.name);
-                                      setStudentRosterPage(1);
-                                    }}
-                                  >
-                                    {rosterDisplayName(roster.name)} <span>{roster.student_count}</span>
-                                  </button>
+                          )}
+                          {!isLoadingStudents && students.length > 0 && (
+                            <table className="mock-table">
+                              <thead>
+                                <tr><th>MSSV</th><th>Họ tên</th><th>Email</th></tr>
+                              </thead>
+                              <tbody>
+                                {(classRosters.find((roster) => roster.name === selectedClassName)?.students || students).slice(0, 8).map((student) => (
+                                  <tr key={student.id}>
+                                    <td>{student.mssv}</td>
+                                    <td>{student.name}</td>
+                                    <td>{student.email}</td>
+                                  </tr>
                                 ))}
-                              </div>
-                            )}
-                            {!isLoadingStudents && students.length > 0 && (
-                              <>
-                                <div className="student-roster-list">
-                                  {pagedRosterStudents.map((student) => (
-                                    <div key={student.id} className="student-roster-row">
-                                      <span className="student-roster-id">{student.mssv}</span>
-                                      <div className="student-roster-person">
-                                        <strong>{student.name}</strong>
-                                        <span>{student.email}</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="student-roster-pagination" aria-label="Phân trang danh sách sinh viên">
-                                  <span className="student-roster-page-summary">
-                                    {studentRosterFrom}-{studentRosterTo} / {activeRosterStudents.length} sinh viên
-                                  </span>
-                                  <div className="student-roster-page-controls">
-                                    <button
-                                      type="button"
-                                      onClick={() => setStudentRosterPage(Math.max(1, currentStudentRosterPage - 1))}
-                                      disabled={currentStudentRosterPage === 1}
-                                    >
-                                      Trước
-                                    </button>
-                                    {studentRosterPageItems.map((item, index) => (
-                                      item === "gap" ? (
-                                        <span key={`gap-${index}`} className="student-roster-page-gap">...</span>
-                                      ) : (
-                                        <button
-                                          key={item}
-                                          type="button"
-                                          className={currentStudentRosterPage === item ? "active" : ""}
-                                          aria-current={currentStudentRosterPage === item ? "page" : undefined}
-                                          onClick={() => setStudentRosterPage(item)}
-                                        >
-                                          {item}
-                                        </button>
-                                      )
-                                    ))}
-                                    <button
-                                      type="button"
-                                      onClick={() => setStudentRosterPage(Math.min(studentRosterTotalPages, currentStudentRosterPage + 1))}
-                                      disabled={currentStudentRosterPage === studentRosterTotalPages}
-                                    >
-                                      Sau
-                                    </button>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </div>
+                              </tbody>
+                            </table>
+                          )}
                         </div>
                       </div>
                     </>
@@ -1117,7 +1934,7 @@ export default function TeacherDashboard() {
                             className={selectedClassName === roster.name ? "active" : ""}
                             onClick={() => setSelectedClassName(roster.name)}
                           >
-                            {rosterDisplayName(roster.name)} <span>{roster.student_count}</span>
+                            {roster.name} <span>{roster.student_count}</span>
                           </button>
                         ))}
                       </div>
@@ -1145,7 +1962,7 @@ export default function TeacherDashboard() {
               {false && isLoadingAsms && <p style={{ color: "hsl(var(--text-muted))" }}>Đang tải bài tập...</p>}
               {false && !isLoadingAsms && assignments.length === 0 && (
                 <div className="tech-panel" style={{ textAlign: "center", padding: "3rem" }}>
-                  <p style={{ color: "hsl(var(--text-muted))" }}>Chưa có bài tập nào được tạo.</p>
+                  <p style={{ color: "hsl(var(--text-muted))" }}>Chưa có bài tập lớn nào được tạo.</p>
                 </div>
               )}
 
@@ -1164,7 +1981,7 @@ export default function TeacherDashboard() {
                         <h3 style={{ fontSize: "1.2rem", fontWeight: "700", color: "hsl(var(--color-primary))", marginTop: "0.65rem" }}>{asm.name}</h3>
                       </div>
                       <span className="mock-badge warning" style={{ fontFamily: "var(--font-mono)" }}>
-                        Hạn nộp: {asm.end_date ? new Date(asm.end_date).toLocaleDateString("vi-VN") : "Không giới hạn"}
+                    Hạn nộp: {asm.end_date ? formatDateOnly(asm.end_date) : "Không giới hạn"}
                       </span>
                     </div>
                     <p style={{ color: "hsl(var(--text-secondary))", fontSize: "0.95rem", marginBottom: "1rem" }}>{asm.description}</p>
@@ -1193,12 +2010,12 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Đăng ký sinh viên bằng CSV/Excel</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2.5rem" }}>
-                Tải lên tệp CSV hoặc Excel chứa danh sách lớp để đăng ký sinh viên vào một bài tập cụ thể.
+                Tải lên tệp CSV hoặc Excel chứa danh sách lớp để đăng ký sinh viên vào một bài tập lớn cụ thể.
               </p>
 
               <div className="tech-panel" style={{ marginBottom: "2rem" }}>
                 <div className="form-group" style={{ maxWidth: "400px" }}>
-                  <label className="form-label">Chọn bài tập đích</label>
+                  <label className="form-label">Chọn bài tập lớn đích</label>
                   <select
                     className="form-control"
                     value={selectedAssignmentId}
@@ -1272,7 +2089,7 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Thêm giảng viên hợp tác</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Cấp quyền cho giảng viên khác tham gia quản lý, chấm điểm và chỉnh sửa bài tập.
+                Cấp quyền cho giảng viên khác tham gia quản lý, chấm điểm và chỉnh sửa bài tập lớn.
               </p>
 
               <form onSubmit={handleAddTeacher} style={{ display: "flex", gap: "1rem", marginBottom: "2rem", maxWidth: "500px" }}>
@@ -1315,7 +2132,7 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Danh sách sinh viên tham gia</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Xem danh sách sinh viên được phân bổ và cấp quyền nộp bài tại các bài tập.
+                Xem danh sách sinh viên được phân bổ và cấp quyền nộp bài tại các bài tập lớn.
               </p>
 
               <AssignmentPicker assignments={assignments} selectedAssignmentId={selectedAssignmentId} setSelectedAssignmentId={setSelectedAssignmentId} />
@@ -1354,7 +2171,7 @@ export default function TeacherDashboard() {
             <div>
               <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>Thống kê khảo sát</h1>
               <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                Thống kê các đánh giá phản hồi gợi ý testcase từ sinh viên cho bài tập.
+                Thống kê các đánh giá phản hồi gợi ý testcase từ sinh viên cho bài tập lớn.
               </p>
 
               <AssignmentPicker assignments={assignments} selectedAssignmentId={selectedAssignmentId} setSelectedAssignmentId={setSelectedAssignmentId} />
@@ -1406,7 +2223,7 @@ export default function TeacherDashboard() {
                             <div style={{ marginBottom: "0.5rem" }}>
                               <span>{feedback.rating}/5 sao</span>
                               <span style={{ fontSize: "0.8rem", color: "hsl(var(--text-muted))", marginLeft: "1rem" }}>
-                                {feedback.created_at ? new Date(feedback.created_at).toLocaleString("vi-VN") : ""}
+                          {feedback.created_at ? formatDateTime(feedback.created_at) : ""}
                               </span>
                             </div>
                             <p style={{ color: "hsl(var(--text-primary))", margin: 0, fontStyle: "italic" }}>&quot;{feedback.text}&quot;</p>
@@ -1424,15 +2241,39 @@ export default function TeacherDashboard() {
 
       {isModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-container">
+          <div className="modal-container assignment-builder-container">
             <div className="modal-header">
-              <h3 className="modal-title">{editingAssignmentId ? "Sửa bài tập" : "Tạo bài tập mới"}</h3>
+              <h3 className="modal-title">{editingAssignmentId ? "Sửa bài tập" : "Tạo bài tập lớn mới"}</h3>
               <button className="modal-close" onClick={() => setIsModalOpen(false)}>×</button>
             </div>
-            <form onSubmit={handleAddAssignment}>
+            <form onSubmit={handleAssignmentFormSubmit}>
               <div className="modal-body">
+                <div className="assignment-wizard-stepper" aria-label="Tiến trình tạo bài tập">
+                  {ASSIGNMENT_WIZARD_STEPS.map((step, index) => {
+                    const isActive = index === assignmentWizardStepIndex;
+                    const isComplete = index < assignmentWizardStepIndex;
+                    const isReachable = index <= assignmentWizardStepIndex;
+                    return (
+                      <button
+                        type="button"
+                        key={step.value}
+                        className={`assignment-wizard-step ${isActive ? "active" : ""} ${isComplete ? "complete" : ""}`}
+                        disabled={!isReachable}
+                        onClick={() => setAssignmentWizardStep(step.value)}
+                      >
+                        <span>{isComplete ? "✓" : index + 1}</span>
+                        <div>
+                          <strong>{step.title}</strong>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {assignmentWizardStep === "SETUP" && (
+                <>
                 <div className="form-group">
-                  <label className="form-label">Tên bài tập</label>
+                  <label className="form-label">Tên bài tập lớn</label>
                   <input
                     type="text"
                     className="form-control"
@@ -1443,6 +2284,48 @@ export default function TeacherDashboard() {
                   />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Mô tả bài tập</label>
+                  <textarea
+                    className="form-control"
+                    placeholder="Mô tả các yêu cầu và đầu ra cần có..."
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ngày bắt đầu</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={newStart}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewStart(value);
+                      setNewStartDisplay(formatDateOnly(value));
+                    }}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Hạn nộp bài</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={newEnd}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewEnd(value);
+                      setNewEndDisplay(formatDateOnly(value));
+                    }}
+                    required
+                  />
+                </div>
+                </>
+                )}
+                {assignmentWizardStep === "CONTENT" && (
+                <>
+                <div className="form-group assignment-type-section">
                   <label className="form-label">Dạng bài</label>
                   <div className="assignment-type-grid">
                     {ASSIGNMENT_TYPES.map((type) => (
@@ -1450,12 +2333,32 @@ export default function TeacherDashboard() {
                         key={type.value}
                         type="button"
                         className={`assignment-type-option ${newType === type.value ? "selected" : ""}`}
-                        onClick={() => setNewType(type.value)}
+                        onClick={() => {
+                          setNewType(type.value);
+                          if (type.value === "STANDARD" || type.value === "QUIZ_CODE") {
+                            setQuestionItems((current) => current.map((question) => ({
+                              ...question,
+                              kind: type.value === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE",
+                              title: question.title,
+                              options: type.value === "QUIZ_CODE" ? question.options : ["", "", "", ""],
+                              testcases: type.value === "QUIZ_CODE" ? [] : (question.testcases.length ? question.testcases : [createTestcasePair("SAMPLE"), createTestcasePair("HIDDEN")]),
+                            })));
+                          }
+                        }}
                       >
-                        <strong>{type.label}</strong>
-                        <span>{type.hint}</span>
+                        <strong>{getAssignmentFlow(type.value).label}</strong>
+                        <span>{getAssignmentFlow(type.value).summary}</span>
                       </button>
                     ))}
+                  </div>
+                  <div className="assignment-flow-summary">
+                    <strong>{assignmentFlow.label}</strong>
+                    <span>{assignmentFlow.summary}</span>
+                    <div>
+                      {assignmentFlow.requirements.map((item) => (
+                        <em key={item}>{item}</em>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="form-group">
@@ -1473,112 +2376,340 @@ export default function TeacherDashboard() {
                     ))}
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Import file bài tập</label>
-                  <input
-                    type="file"
-                    ref={assignmentFileInputRef}
-                    accept=".txt,.md,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.json,.zip"
-                    onChange={handleAssignmentFileChange}
-                  />
-                  <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem" }}>
-                    Bài thường/quiz: file vào đề bài. Đục lỗ/sửa lỗi/project: file vào template hoặc starter code.
-                  </p>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Ngày bắt đầu</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={newStart}
-                    onChange={(e) => setNewStart(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Hạn nộp bài</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={newEnd}
-                    onChange={(e) => setNewEnd(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Mô tả bài tập</label>
-                  <textarea
-                    className="form-control"
-                    placeholder="Mô tả các yêu cầu và đầu ra cần có..."
-                    value={newDesc}
-                    onChange={(e) => setNewDesc(e.target.value)}
-                    rows={4}
-                  />
-                </div>
+                {SHOW_ASSIGNMENT_IMPORT_FIELD && (
+                  <div className="form-group import-field">
+                    <label className="form-label">Import file bài tập</label>
+                    <input
+                      type="file"
+                      ref={assignmentFileInputRef}
+                      accept=".txt,.md,.docx,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.json,.zip"
+                      onChange={handleAssignmentFileChange}
+                    />
+                    <p style={{ color: "hsl(var(--text-muted))", fontSize: "0.85rem" }}>
+                      Bài thường/quiz: file vào đề bài. Đục lỗ/sửa lỗi/project: file vào template hoặc starter code.
+                    </p>
+                  </div>
+                )}
+                </>
+                )}
+                {isQuestionSetAssignment && (assignmentWizardStep === "CONTENT" || assignmentWizardStep === "TESTCASES") && (
+                  <div className={`question-builder-panel ${assignmentWizardStep === "TESTCASES" ? "question-testcase-detail-panel" : ""}`}>
+                    {assignmentWizardStep === "CONTENT" ? (
+                      <div className="question-list-heading-row">
+                        <div>
+                          <label className="form-label">{newType === "QUIZ_CODE" ? "Danh sách câu trắc nghiệm" : "Danh sách câu hỏi lập trình"}</label>
+                          <p className="field-hint">{newType === "QUIZ_CODE" ? "Mỗi câu có 4 đáp án, chọn một đáp án đúng." : "Mỗi câu có đề riêng, điểm riêng và lời giải chuẩn riêng."}</p>
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
+                          Thêm câu hỏi
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="panel-title-row">
+                        <div>
+                          <h4>Testcase theo từng câu</h4>
+                          <p>Mỗi câu giữ testcase hiển thị và testcase chấm ẩn trong một vùng riêng.</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="question-builder-list" ref={questionListRef}>
+                      {questionItems.map((question, questionIndex) => (
+                        <div className="question-builder-card" key={question.id} data-question-id={question.id}>
+                          <div className="question-builder-card-header">
+                            <div className="question-builder-card-title">
+                              <span className="question-number-badge">{questionIndex + 1}</span>
+                              <div>
+                                <span className="question-builder-card-kicker">Câu hỏi</span>
+                                <strong>{question.title.trim() || "Chưa đặt tiêu đề"}</strong>
+                              </div>
+                            </div>
+                            <button type="button" className="btn btn-secondary" onClick={() => removeQuestionItem(questionIndex)}>
+                              Xóa câu
+                            </button>
+                          </div>
+                          {assignmentWizardStep === "CONTENT" && (
+                          <>
+                            <div className="question-builder-meta">
+                              <label>
+                                <span>Tiêu đề ngắn</span>
+                                <input
+                                  className="form-control"
+                                  value={question.title}
+                                  onChange={(e) => updateQuestionItem(questionIndex, "title", e.target.value)}
+                                  placeholder="VD: In mảng một chiều"
+                                />
+                              </label>
+                              <label>
+                                <span>Điểm</span>
+                                <input
+                                  className="form-control"
+                                  type="number"
+                                  min={0}
+                                  step={0.25}
+                                  value={question.points}
+                                  onChange={(e) => updateQuestionItem(questionIndex, "points", Number(e.target.value))}
+                                />
+                              </label>
+                            </div>
+                            <label className="question-builder-field">
+                              <span>Nội dung câu hỏi</span>
+                              <textarea
+                                className="form-control"
+                                value={question.prompt}
+                                onChange={(e) => updateQuestionItem(questionIndex, "prompt", e.target.value)}
+                                rows={4}
+                                placeholder={newType === "QUIZ_CODE" ? "Ví dụ: Độ phức tạp của thuật toán binary search là gì?" : "Ví dụ: Define a function named ArrayShow to show elements of an integer array, size n."}
+                              />
+                            </label>
+                            {newType === "QUIZ_CODE" ? (
+                              <div className="question-options-grid">
+                                {question.options.map((option, optionIndex) => (
+                                  <label key={`option-${question.id}-${optionIndex}`} className={question.correctOption === optionIndex ? "selected" : ""}>
+                                    <input
+                                      type="radio"
+                                      name={`correct-${question.id}`}
+                                      checked={question.correctOption === optionIndex}
+                                      onChange={() => updateQuestionItem(questionIndex, "correctOption", optionIndex)}
+                                    />
+                                    <span>{String.fromCharCode(65 + optionIndex)}</span>
+                                    <input
+                                      className="form-control"
+                                      value={option}
+                                      onChange={(e) => updateQuestionOption(questionIndex, optionIndex, e.target.value)}
+                                      placeholder={`Đáp án ${String.fromCharCode(65 + optionIndex)}`}
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <>
+                                <label className="question-builder-field">
+                                  <span>Starter code / khung trả lời</span>
+                                  <textarea
+                                    className="form-control testcase-textarea"
+                                    value={question.starterCode}
+                                    onChange={(e) => updateQuestionItem(questionIndex, "starterCode", e.target.value)}
+                                    rows={4}
+                                    placeholder="Ví dụ: void ArrayShow(int a[], int n) { ... }"
+                                  />
+                                </label>
+                                <label className="question-builder-field">
+                                  <span>Đáp án chuẩn / ghi chú chấm</span>
+                                  <textarea
+                                    className="form-control testcase-textarea"
+                                    value={question.referenceAnswer}
+                                    onChange={(e) => updateQuestionItem(questionIndex, "referenceAnswer", e.target.value)}
+                                    rows={4}
+                                    placeholder="Dán lời giải tham chiếu hoặc mô tả output đúng."
+                                  />
+                                </label>
+                              </>
+                            )}
+                          </>
+                          )}
+                          {assignmentWizardStep === "TESTCASES" && (
+                            newType === "QUIZ_CODE" ? (
+                              <div className="question-testcase-panel">
+                                <p className="field-hint">Câu trắc nghiệm được chấm theo đáp án đúng đã chọn ở bước nội dung.</p>
+                              </div>
+                            ) : (
+                              <div className="question-testcase-panel">
+                                <div className="testcase-pair-header">
+                                  <div>
+                                    <label className="form-label">Testcase của câu này</label>
+                                    <span className="testcase-count-line">
+                                      {question.testcases.filter(isSampleTestcase).length} hiển thị · {question.testcases.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn
+                                    </span>
+                                  </div>
+                                </div>
+                                <TestcaseGroupEditor
+                                  pairs={question.testcases}
+                                  keyPrefix={question.id}
+                                  inputLabel="Test"
+                                  expectedLabel="Expected"
+                                  inputPlaceholder="int n = 5; int Arr[] = {1,2,3,4,5}; ArrayShow(Arr,n);"
+                                  expectedPlaceholder="1 2 3 4 5"
+                                  canRemove={question.testcases.length > 1}
+                                  onAdd={(visibility) => addQuestionTestcase(questionIndex, visibility)}
+                                  onUpdate={(testcaseIndex, field, value) => updateQuestionTestcase(questionIndex, testcaseIndex, field, value)}
+                                  onRemove={(testcaseIndex) => removeQuestionTestcase(questionIndex, testcaseIndex)}
+                                />
+                              </div>
+                            )
+                          )}
+                        </div>
+                      ))}
+                      {assignmentWizardStep === "CONTENT" && (
+                      <div className="question-builder-add-row">
+                        <div>
+                          <strong>Thêm câu hỏi tiếp theo</strong>
+                          <span>Câu mới sẽ nằm ngay dưới cùng và tự đưa con trỏ tới ô nhập đầu tiên.</span>
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
+                          Thêm câu hỏi
+                        </button>
+                      </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {isQuestionSetAssignment && assignmentWizardStep === "TESTCASES" && (
+                  <div className="assignment-testcase-builder question-testcase-summary-panel">
+                    <div className="panel-title-row">
+                      <div>
+                        <h4>{newType === "QUIZ_CODE" ? "Chấm trắc nghiệm" : "Testcase & gợi ý"}</h4>
+                        <p>
+                          {newType === "QUIZ_CODE"
+                            ? "Trắc nghiệm được chấm theo đáp án đúng A/B/C/D đã chọn ở từng câu."
+                            : "Testcase được lấy trực tiếp từ từng câu hỏi. Có thể xem nhanh seed và preview testcase sinh thêm tại đây."}
+                        </p>
+                      </div>
+                      <span>
+                        {newType === "QUIZ_CODE"
+                          ? `${questionItems.length} câu`
+                          : `${questionSampleCount} hiển thị · ${questionHiddenCount} chấm ẩn · ${generatedCount} sinh thêm`}
+                      </span>
+                    </div>
+
+                    {newType !== "QUIZ_CODE" && (
+                      <>
+                        <div className="question-testcase-controls">
+                          <label>
+                            <span>Chiến lược sinh</span>
+                            <select
+                              className="form-control"
+                              value={generationStrategy}
+                              onChange={(e) => setGenerationStrategy(e.target.value as GenerationStrategy)}
+                            >
+                              {GENERATION_STRATEGIES.map((strategy) => (
+                                <option key={strategy.value} value={strategy.value}>
+                                  {strategy.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            <span>Số testcase sinh thêm</span>
+                            <input
+                              className="form-control"
+                              type="number"
+                              min={0}
+                              max={500}
+                              value={generatedCount}
+                              onChange={(e) => setGeneratedCount(Number(e.target.value))}
+                            />
+                          </label>
+                        </div>
+
+                        <div className="question-testcase-preview-grid">
+                          <div>
+                            <div className="compact-section-heading">
+                              <div>
+                                <h4>Testcase đã nhập</h4>
+                                <p>Dữ liệu hệ thống dùng để chấm và làm mẫu sinh thêm.</p>
+                              </div>
+                              <span className="panel-count-pill">{questionTestcases.length} testcase</span>
+                            </div>
+                            {questionTestcases.length > 0 ? (
+                              <pre>{questionTestcases.slice(0, 8).map((pair, index) => `Câu ${pair.question || "-"} / Testcase ${index + 1}\nInput: ${pair.input || "Không có input"}\nExpected: ${pair.expected || "Chưa có expected"}`).join("\n\n")}</pre>
+                            ) : (
+                              <div className="testcase-preview-empty">Chưa có testcase nào. Hãy thêm Input và Expected trong từng câu hỏi bên dưới.</div>
+                            )}
+                          </div>
+                          <div>
+                            <div className="compact-section-heading">
+                              <div>
+                                <h4>Testcase dự kiến sinh thêm</h4>
+                                <p>Dựa trên testcase đã nhập và chiến lược đang chọn.</p>
+                              </div>
+                              <span>{strategyLabel(generationStrategy)}</span>
+                            </div>
+                            {questionGeneratedPreview.length > 0 ? (
+                              <pre>{questionGeneratedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n")}</pre>
+                            ) : (
+                              <div className="testcase-preview-empty">Chưa thể sinh preview. Cần ít nhất một testcase đã nhập.</div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                  </div>
+                )}
+                {!isQuestionSetAssignment && assignmentWizardStep === "CONTENT" && (
+                <>
                 <div className="assignment-logic-panel">
                   <div className="panel-title-row">
                     <div>
-                      <h4>{typeLabel(newType)} cần dữ liệu gì?</h4>
-                      <p>{assignmentTypeGuide(newType)}</p>
+                      <h4>{assignmentFlow.label}</h4>
+                      <p>{assignmentFlow.importHint}</p>
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Đề bài hiển thị cho sinh viên</label>
+                    <label className="form-label">{assignmentFlow.problemLabel}</label>
                     <textarea
                       className="form-control"
                       value={problemStatement}
                       onChange={(e) => setProblemStatement(e.target.value)}
                       rows={4}
-                      placeholder="Nhập đề bài, input/output, ràng buộc và yêu cầu nộp..."
+                      placeholder={assignmentFlow.problemPlaceholder}
                     />
                   </div>
-                  {(newType === "FILL_BLANK" || newType === "DEBUGGING" || newType === "PROJECT") && (
+                  {assignmentFlow.starterLabel && (
                     <div className="form-group">
-                      <label className="form-label">
-                        {newType === "FILL_BLANK" ? "Bài hoàn chỉnh / template trước khi đục lỗ" : newType === "DEBUGGING" ? "Code lỗi giao cho sinh viên" : "Cấu trúc project / file starter"}
-                      </label>
+                      <label className="form-label">{assignmentFlow.starterLabel}</label>
                       <textarea
                         className="form-control testcase-textarea"
                         value={starterCode}
                         onChange={(e) => setStarterCode(e.target.value)}
                         rows={7}
-                        placeholder={newType === "FILL_BLANK" ? "Dán code hoàn chỉnh. Đánh dấu vùng có thể đục bằng /* HOLE:start */ ... /* HOLE:end */ nếu muốn tự kiểm soát." : "Dán starter code hoặc mô tả cây thư mục."}
+                        placeholder={assignmentFlow.starterPlaceholder}
                       />
                     </div>
                   )}
                   <div className="form-group">
-                    <label className="form-label">
-                      {newType === "QUIZ_CODE" ? "Đáp án / giải thích chuẩn" : "Lời giải tham chiếu"}
-                    </label>
+                    <label className="form-label">{assignmentFlow.solutionLabel}</label>
                     <textarea
                       className="form-control testcase-textarea"
                       value={referenceSolution}
                       onChange={(e) => setReferenceSolution(e.target.value)}
                       rows={6}
-                      placeholder="Dùng để sinh/đối chiếu testcase và làm chuẩn chấm nội bộ."
+                      placeholder={assignmentFlow.solutionPlaceholder}
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">{typeConfigLabel(newType)}</label>
+                    <label className="form-label">{assignmentFlow.configLabel}</label>
                     <textarea
                       className="form-control"
                       value={typeConfig}
                       onChange={(e) => setTypeConfig(e.target.value)}
                       rows={3}
-                      placeholder={typeConfigPlaceholder(newType)}
+                      placeholder={assignmentFlow.configPlaceholder}
                     />
+                  </div>
+                </div>
+                </>
+                )}
+                {!isQuestionSetAssignment && assignmentWizardStep === "TESTCASES" && (
+                <>
+                <div className="builder-step-heading">
+                  <div>
+                    <strong>Testcase và chấm điểm</strong>
+                    <p>{assignmentFlow.requireTestcases ? "Dạng bài này cần testcase mẫu để chấm tự động và sinh thêm biến thể." : "Dạng bài này không bắt buộc testcase; chỉ nhập khi cần kiểm chứng tự động."}</p>
                   </div>
                 </div>
                 <div className="assignment-testcase-builder">
                   <div className="panel-title-row">
                     <div>
-                      <h4>Testcase mẫu và bộ sinh testcase</h4>
-                      <p>Import file mẫu hoặc dán mỗi testcase trên một dòng. Preview bên dưới cho thấy cách hệ thống sinh biến thể tương tự.</p>
+                      <h4>{assignmentFlow.testcaseTitle}</h4>
+                      <p>{assignmentFlow.testcaseHint}</p>
                     </div>
-                    <span>{seedCount} seed + {generatedCount} generated</span>
+                    <span>{assignmentFlow.requireTestcases ? `${seedCount} seed + ${generatedCount} sinh thêm` : "Tùy chọn"}</span>
                   </div>
                   <div className="testcase-builder-grid">
                     <div>
+                      {assignmentFlow.requireTestcases && (
+                      <>
                       <div className="form-group">
                         <label className="form-label">Chiến lược sinh</label>
                         <select
@@ -1604,37 +2735,149 @@ export default function TeacherDashboard() {
                           onChange={(e) => setGeneratedCount(Number(e.target.value))}
                         />
                       </div>
+                      </>
+                      )}
                       <div className="form-group">
                         <label className="form-label">Import testcase mẫu</label>
                         <input type="file" accept=".txt,.csv,.json" ref={testcaseInputRef} onChange={handleTestcaseFileChange} />
                       </div>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Testcase mẫu</label>
-                      <textarea
-                        className="form-control testcase-textarea"
-                        value={sampleTestcases}
-                        onChange={(e) => setSampleTestcases(e.target.value)}
-                        rows={8}
+                      <div className="testcase-pair-header">
+                        <div>
+                          <label className="form-label">Bảng testcase</label>
+                          <span className="testcase-count-line">
+                            {testcasePairs.filter(isSampleTestcase).length} hiển thị · {testcasePairs.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn
+                          </span>
+                        </div>
+                      </div>
+                      <TestcaseGroupEditor
+                        pairs={testcasePairs}
+                        keyPrefix="assignment"
+                        inputLabel="Input"
+                        expectedLabel="Expected output"
+                        inputPlaceholder="Ví dụ: 17"
+                        expectedPlaceholder="Ví dụ: YES"
+                        canRemove={testcasePairs.length > 1}
+                        onAdd={addTestcasePair}
+                        onUpdate={updateTestcasePair}
+                        onRemove={removeTestcasePair}
                       />
+                      <p className="field-hint">Mỗi dòng là một testcase hoàn chỉnh. Input và expected output được tách riêng để tránh nhập nhầm.</p>
                     </div>
                   </div>
+                  {assignmentFlow.requireTestcases && (
                   <div className="generated-preview">
                     <div className="panel-title-row">
                       <strong>Preview testcase sinh thêm</strong>
                       <span>{strategyLabel(generationStrategy)}</span>
                     </div>
-                    <pre>{generatedPreview.join("\n") || "Thêm testcase mẫu để xem preview."}</pre>
+                    <pre>{generatedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n") || "Thêm testcase mẫu để xem preview."}</pre>
                   </div>
+                  )}
                 </div>
+                </>
+                )}
+                {assignmentWizardStep === "REVIEW" && (
+                  <div className="assignment-review-panel">
+                    <div className="panel-title-row">
+                      <div>
+                        <h4>Xem lại trước khi {editingAssignmentId ? "lưu" : "tạo"}</h4>
+                        <p>Kiểm tra nhanh thông tin, nội dung và cấu hình chấm trước khi gửi lên hệ thống.</p>
+                      </div>
+                    </div>
+                    <div className="assignment-review-grid">
+                      <section>
+                        <span>Tên bài</span>
+                        <strong>{newTitle || "Chưa nhập tên bài"}</strong>
+                        <p>{assignmentFlow.label} · {languageLabel(languages)}</p>
+                      </section>
+                      <section>
+                        <span>Thời gian</span>
+                        <strong>{newStart ? formatDateOnly(newStart) : "Chưa có ngày"} → {newEnd ? formatDateOnly(newEnd) : "Chưa có hạn"}</strong>
+                        <p>{newDesc || "Chưa có mô tả ngắn."}</p>
+                      </section>
+                      <section>
+                        <span>Nội dung</span>
+                        <strong>{isQuestionSetAssignment ? `${questionItems.length} câu` : assignmentFlow.problemLabel}</strong>
+                        <p>
+                          {isQuestionSetAssignment
+                            ? `${questionItems.reduce((sum, question) => sum + Number(question.points || 0), 0)} điểm`
+                            : (problemStatement || "Chưa nhập nội dung chính.")}
+                        </p>
+                      </section>
+                      <section>
+                        <span>Chấm điểm</span>
+                        <strong>
+                          {isQuestionSetAssignment
+                            ? `${questionSampleCount} hiển thị · ${questionHiddenCount} chấm ẩn`
+                            : `${testcasePairs.filter(isSampleTestcase).length} hiển thị · ${testcasePairs.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn`}
+                        </strong>
+                        <p>{generatedCount} testcase sinh thêm</p>
+                      </section>
+                    </div>
+                  </div>
+                )}
+                {isQuestionSetAssignment && assignmentWizardStep === "REVIEW" && (
+                  <div className="student-preview-panel review-student-preview-panel">
+                    <div className="compact-section-heading">
+                      <h4>Preview phía sinh viên</h4>
+                      <span>{newType === "QUIZ_CODE" ? `${questionItems.length} câu` : `${questionSampleCount} testcase hiển thị`}</span>
+                    </div>
+                    <div className="student-preview-list">
+                      {activeQuestions.slice(0, 3).map((question, index) => {
+                        const samplePairs = question.testcases.filter(isSampleTestcase).filter((pair) => pair.input.trim() || pair.expected.trim());
+                        return (
+                          <div className="student-preview-question" key={`preview-${question.id}`}>
+                            <div>
+                              <span>Câu {index + 1}</span>
+                              <strong>{question.title || `Câu ${index + 1}`}</strong>
+                            </div>
+                            <p>{question.prompt || "Chưa nhập nội dung câu hỏi."}</p>
+                            {question.kind === "SINGLE_CHOICE" ? (
+                              <ul>
+                                {question.options.map((option, optionIndex) => (
+                                  <li key={`preview-option-${question.id}-${optionIndex}`}>
+                                    {String.fromCharCode(65 + optionIndex)}. {option || `Đáp án ${String.fromCharCode(65 + optionIndex)}`}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="student-preview-testcases">
+                                {samplePairs.length > 0
+                                  ? samplePairs.slice(0, 2).map((pair, pairIndex) => (
+                                      <code key={`preview-sample-${question.id}-${pairIndex}`}>{pair.input || "Không có input"} → {pair.expected || "Chưa có expected"}</code>
+                                    ))
+                                  : <em>Chưa có testcase hiển thị cho sinh viên.</em>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>
                   Hủy
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingAssignmentId ? "Lưu thay đổi" : "Tạo mới"}
-                </button>
+                <div className="assignment-wizard-footer-actions">
+                  {assignmentWizardStepIndex > 0 && (
+                    <button type="button" className="btn btn-secondary" onClick={goToPreviousWizardStep}>
+                      Quay lại
+                    </button>
+                  )}
+                  {!isLastWizardStep ? (
+                    <button type="button" className="btn btn-primary" onClick={goToNextWizardStep}>
+                      Tiếp theo
+                    </button>
+                  ) : (
+                    <button type="button" className="btn btn-primary" onClick={handleAddAssignment}>
+                      {editingAssignmentId ? "Lưu thay đổi" : "Tạo mới"}
+                    </button>
+                  )}
+                </div>
               </div>
             </form>
           </div>
@@ -1674,14 +2917,14 @@ function AssignmentPicker({
   return (
     <div className="tech-panel" style={{ marginBottom: "2rem" }}>
       <div className="form-group" style={{ maxWidth: "400px" }}>
-        <label className="form-label">Chọn bài tập</label>
+        <label className="form-label">Chọn bài tập lớn</label>
         <select
           className="form-control"
           value={selectedAssignmentId}
           onChange={(e) => setSelectedAssignmentId(e.target.value)}
           style={{ background: "white" }}
         >
-          <option value="" disabled>-- Chọn bài tập --</option>
+          <option value="" disabled>-- Chọn bài tập lớn --</option>
           {assignments.map((assignment) => (
             <option key={assignment.id} value={assignment.id}>
               {assignment.name}

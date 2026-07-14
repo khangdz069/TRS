@@ -6,6 +6,10 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.trs.backend.entity.Account;
 import com.trs.backend.entity.Assignment;
 import com.trs.backend.entity.FeedbackForm;
@@ -16,6 +20,8 @@ import com.trs.backend.entity.Teacher;
 
 @Component
 public class DtoMapper {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     public Map<String, Object> account(Account account) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", account.getId().toString());
@@ -69,6 +75,14 @@ public class DtoMapper {
         return map;
     }
 
+    public Map<String, Object> assignmentForStudent(Assignment assignment) {
+        Map<String, Object> map = assignment(assignment);
+        map.put("testcase_samples", publicTestcaseSamples(assignment.getTestcaseSamples()));
+        map.put("reference_solution", "");
+        map.put("type_config", publicTypeConfig(assignment.getTypeConfig()));
+        return map;
+    }
+
     public Map<String, Object> submission(Submission submission) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", submission.getId().toString());
@@ -113,6 +127,85 @@ public class DtoMapper {
         map.put("feedback", form.getFeedback());
         map.put("created_at", iso(form.getCreatedAt()));
         return map;
+    }
+
+    private static String publicTestcaseSamples(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(value);
+            if (!root.isArray()) {
+                return value;
+            }
+            ArrayNode visible = OBJECT_MAPPER.createArrayNode();
+            for (JsonNode item : root) {
+                if (!isHiddenTestcase(item)) {
+                    visible.add(item);
+                }
+            }
+            return OBJECT_MAPPER.writeValueAsString(visible);
+        } catch (Exception ignored) {
+            return value;
+        }
+    }
+
+    private static String publicTypeConfig(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(value);
+            if (root.isObject()) {
+                ObjectNode copy = root.deepCopy();
+                JsonNode questions = copy.get("questions");
+                if (questions instanceof ArrayNode questionArray) {
+                    sanitizeQuestions(questionArray);
+                }
+                return OBJECT_MAPPER.writeValueAsString(copy);
+            }
+            if (root.isArray()) {
+                ArrayNode copy = root.deepCopy();
+                sanitizeQuestions(copy);
+                return OBJECT_MAPPER.writeValueAsString(copy);
+            }
+            return value;
+        } catch (Exception ignored) {
+            return value;
+        }
+    }
+
+    private static void sanitizeQuestions(ArrayNode questions) {
+        for (JsonNode question : questions) {
+            if (!(question instanceof ObjectNode questionObject)) {
+                continue;
+            }
+            questionObject.put("referenceAnswer", "");
+            questionObject.remove("correctOption");
+            JsonNode testcases = questionObject.get("testcases");
+            if (!testcases.isArray()) {
+                continue;
+            }
+            ArrayNode visibleTestcases = OBJECT_MAPPER.createArrayNode();
+            for (JsonNode testcase : testcases) {
+                if (!isHiddenTestcase(testcase)) {
+                    visibleTestcases.add(testcase);
+                }
+            }
+            questionObject.set("testcases", visibleTestcases);
+        }
+    }
+
+    private static boolean isHiddenTestcase(JsonNode item) {
+        if (item == null || item.isNull()) {
+            return false;
+        }
+        String visibility = item.path("visibility").asText("");
+        if ("HIDDEN".equalsIgnoreCase(visibility)) {
+            return true;
+        }
+        JsonNode hidden = item.get("hidden");
+        return hidden != null && hidden.asBoolean(false);
     }
 
     private static String iso(Object value) {

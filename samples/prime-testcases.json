@@ -1,0 +1,26 @@
+[
+  {
+    "input": "1",
+    "expected": "NO"
+  },
+  {
+    "input": "2",
+    "expected": "YES"
+  },
+  {
+    "input": "9",
+    "expected": "NO"
+  },
+  {
+    "input": "17",
+    "expected": "YES"
+  },
+  {
+    "input": "100",
+    "expected": "NO"
+  },
+  {
+    "input": "997",
+    "expected": "YES"
+  }
+]
