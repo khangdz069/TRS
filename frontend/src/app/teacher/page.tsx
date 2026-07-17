@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import mammoth from "mammoth";
 
@@ -229,7 +229,7 @@ const createQuestion = (type: AssignmentType, index = 1): AssignmentQuestion => 
   title: "",
   prompt: type === "QUIZ_CODE"
     ? "Chọn đáp án đúng nhất."
-    : "Viết lời giải cho yêu cầu dưới đây.",
+    : "",
   points: 1,
   kind: type === "QUIZ_CODE" ? "SINGLE_CHOICE" : "CODE",
   starterCode: "",
@@ -444,15 +444,36 @@ function TestcaseGroupEditor({
   onUpdate,
   onRemove,
 }: TestcaseGroupEditorProps) {
+  const [expandedGroups, setExpandedGroups] = useState<Record<TestcaseVisibility, boolean>>({
+    SAMPLE: true,
+    HIDDEN: false,
+  });
+
+  const toggleGroup = (visibility: TestcaseVisibility) => {
+    setExpandedGroups((current) => ({
+      ...current,
+      [visibility]: !current[visibility],
+    }));
+  };
+
+  const handleAdd = (visibility: TestcaseVisibility) => {
+    setExpandedGroups((current) => ({
+      ...current,
+      [visibility]: true,
+    }));
+    onAdd(visibility);
+  };
+
   return (
     <div className="testcase-group-list">
       {TESTCASE_GROUPS.map((group) => {
         const groupedTestcases = pairs
           .map((pair, index) => ({ pair, index }))
           .filter(({ pair }) => isTestcaseInGroup(pair, group.visibility));
+        const isExpanded = expandedGroups[group.visibility];
 
         return (
-          <section className={`testcase-group is-${group.tone}`} key={`${keyPrefix}-${group.visibility}`}>
+          <section className={`testcase-group is-${group.tone} ${isExpanded ? "expanded" : "collapsed"}`} key={`${keyPrefix}-${group.visibility}`}>
             <div className="testcase-group-header">
               <div className="testcase-group-title">
                 <span className="testcase-status-dot" aria-hidden="true" />
@@ -460,14 +481,24 @@ function TestcaseGroupEditor({
               </div>
               <div className="testcase-group-actions">
                 <span className="testcase-group-count">{groupedTestcases.length} case</span>
-                <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => onAdd(group.visibility)}>
+                {groupedTestcases.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact testcase-toggle-btn"
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleGroup(group.visibility)}
+                  >
+                    {isExpanded ? "Thu gọn" : "Mở"}
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary btn-compact testcase-add-btn" onClick={() => handleAdd(group.visibility)}>
                   {group.addLabel}
                 </button>
               </div>
             </div>
-            {groupedTestcases.length === 0 ? (
+            {isExpanded && groupedTestcases.length === 0 ? (
               <div className="testcase-group-empty">{group.emptyLabel}</div>
-            ) : (
+            ) : isExpanded ? (
               <div className="question-testcase-table">
                 <div className="testcase-table-header">
                   <span>{inputLabel}</span>
@@ -516,7 +547,7 @@ function TestcaseGroupEditor({
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
           </section>
         );
       })}
@@ -544,15 +575,15 @@ const ASSIGNMENT_TYPES: Array<{ value: AssignmentType; label: string; hint: stri
   { value: "QUIZ_CODE", label: "Trắc nghiệm code", hint: "Câu hỏi ngắn có kiểm thử tự động." },
 ];
 
+const VISIBLE_ASSIGNMENT_TYPES = ASSIGNMENT_TYPES.filter((type) => (
+  type.value === "STANDARD" || type.value === "QUIZ_CODE"
+));
+
 const LANGUAGE_OPTIONS = [
-  { value: "cpp", label: "C++" },
   { value: "c", label: "C" },
+  { value: "cpp", label: "C++" },
   { value: "java", label: "Java" },
   { value: "python", label: "Python" },
-  { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
-  { value: "go", label: "Go" },
-  { value: "rust", label: "Rust" },
 ];
 
 const GENERATION_STRATEGIES: Array<{ value: GenerationStrategy; label: string; hint: string }> = [
@@ -630,7 +661,7 @@ const strategyLabel = (value?: string) =>
   GENERATION_STRATEGIES.find((item) => item.value === value)?.label || "Biến đổi tham số";
 
 const languageLabel = (values?: string[]) => {
-  if (!values || values.length === 0) return "C++";
+  if (!values || values.length === 0) return "C";
   return values.map((value) => LANGUAGE_OPTIONS.find((item) => item.value === value)?.label || value).join(", ");
 };
 
@@ -698,7 +729,7 @@ const ASSIGNMENT_FLOW: Record<
     configLabel: "Cấu hình chấm",
     configPlaceholder: "Ví dụ: time_limit=2s; memory=256MB; public_tests=10.",
     testcaseTitle: "Testcase chấm tự động",
-    testcaseHint: "Mỗi dòng là một testcase seed. Có thể import file mẫu rồi sinh thêm biến thể.",
+    testcaseHint: "Mỗi dòng là một testcase mẫu. Có thể nhập file mẫu rồi để hệ thống tự tạo thêm biến thể.",
     requireStarter: false,
     requireTestcases: true,
     requirements: ["Đề bài", "Lời giải chuẩn", "Testcase mẫu"],
@@ -776,6 +807,12 @@ const ASSIGNMENT_FLOW: Record<
 };
 
 const getAssignmentFlow = (type: AssignmentType) => ASSIGNMENT_FLOW[type] || ASSIGNMENT_FLOW.STANDARD;
+const SIDEBAR_WIDTH_STORAGE_KEY = "trs.sidebarWidth";
+const DEFAULT_SIDEBAR_WIDTH = 268;
+const MIN_SIDEBAR_WIDTH = 220;
+const MAX_SIDEBAR_WIDTH = 460;
+
+const clampSidebarWidth = (width: number) => Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
 
 export default function TeacherDashboard() {
   const router = useRouter();
@@ -785,6 +822,7 @@ export default function TeacherDashboard() {
 
   const [activeTab, setActiveTab] = useState<TeacherTab>("assignments");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
   const [assignmentWizardStep, setAssignmentWizardStep] = useState<AssignmentWizardStep>("SETUP");
@@ -819,13 +857,14 @@ export default function TeacherDashboard() {
   const [questionItems, setQuestionItems] = useState<AssignmentQuestion[]>([createQuestion("STANDARD", 1)]);
   const questionListRef = useRef<HTMLDivElement | null>(null);
   const pendingQuestionFocusIdRef = useRef<string | null>(null);
-  const [languages, setLanguages] = useState<string[]>(["cpp"]);
+  const [languages, setLanguages] = useState<string[]>(["c"]);
   const [generationStrategy, setGenerationStrategy] = useState<GenerationStrategy>("MUTATION");
   const [testcasePairs, setTestcasePairs] = useState<TestcasePair[]>(DEFAULT_TESTCASE_PAIRS);
   const [generatedCount, setGeneratedCount] = useState(20);
   const [teacherEmail, setTeacherEmail] = useState("");
   const [studentForm, setStudentForm] = useState({ mssv: "", name: "", email: "" });
   const [isAddingStudent, setIsAddingStudent] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -864,8 +903,7 @@ export default function TeacherDashboard() {
   const openAssignmentCount = assignments.filter((assignment) => getAssignmentStatus(assignment) === "OPEN").length;
   const closedAssignmentCount = assignments.length - openAssignmentCount;
   const assignmentTypeCount = new Set(assignments.map((asm) => asm.assignment_type || "STANDARD")).size;
-  const languageCount = new Set(assignments.flatMap((asm) => asm.supported_languages || ["cpp"])).size;
-  const generatedTotal = assignments.reduce((sum, asm) => sum + (asm.generated_testcase_count || 0), 0);
+  const languageCount = new Set(assignments.flatMap((asm) => asm.supported_languages || ["c"])).size;
   const getAssignmentDueInfo = (assignment: Assignment) => {
     if (!assignment.end_date) {
       return { dateLabel: "Không giới hạn", helper: "Mở" };
@@ -899,7 +937,6 @@ export default function TeacherDashboard() {
     (sum, question) => sum + question.testcases.filter((pair) => !isSampleTestcase(pair) && (pair.input.trim() || pair.expected.trim())).length,
     0,
   );
-  const questionGeneratedPreview = generateTestcases(questionTestcases, Math.min(generatedCount, 8), generationStrategy);
   const assignmentWizardStepIndex = Math.max(0, ASSIGNMENT_WIZARD_STEPS.findIndex((step) => step.value === assignmentWizardStep));
   const isLastWizardStep = assignmentWizardStepIndex === ASSIGNMENT_WIZARD_STEPS.length - 1;
 
@@ -1102,7 +1139,7 @@ export default function TeacherDashboard() {
     setReferenceSolution("");
     setTypeConfig("");
     setQuestionItems([createQuestion("STANDARD", 1)]);
-    setLanguages(["cpp"]);
+    setLanguages(["c"]);
     setGenerationStrategy("MUTATION");
     setTestcasePairs(DEFAULT_TESTCASE_PAIRS);
     setGeneratedCount(20);
@@ -1132,7 +1169,7 @@ export default function TeacherDashboard() {
     setReferenceSolution(assignment.reference_solution || "");
     setTypeConfig(assignment.type_config || "");
     setQuestionItems(parseQuestionConfig(assignment.type_config, assignment.assignment_type || "STANDARD"));
-    setLanguages(assignment.supported_languages?.length ? assignment.supported_languages : ["cpp"]);
+    setLanguages(assignment.supported_languages?.length ? assignment.supported_languages : ["c"]);
     setGenerationStrategy(assignment.testcase_generation_strategy || "MUTATION");
     setTestcasePairs(parseTestcasePairs(assignment.testcase_samples));
     setGeneratedCount(assignment.generated_testcase_count || 0);
@@ -1405,7 +1442,7 @@ export default function TeacherDashboard() {
     const name = studentForm.name.trim();
     if (!mssv || !email) {
       setUploadMessage("");
-      setUploadError("Vui long nhap MSSV va email sinh vien.");
+      setUploadError("Vui lòng nhập MSSV và email sinh viên.");
       return;
     }
 
@@ -1431,14 +1468,14 @@ export default function TeacherDashboard() {
 
       const data = await response.json();
       if (response.ok) {
-        setUploadMessage(`Da them sinh vien ${email} vao lop ${data.class_section || classSection || "Default"}.`);
+        setUploadMessage(`Đã thêm sinh viên ${email} vào lớp ${data.class_section || classSection || "Default"}.`);
         setStudentForm({ mssv: "", name: "", email: "" });
         fetchStudents(selectedAssignmentId);
       } else {
-        setUploadError(data.error || "Khong the them sinh vien.");
+        setUploadError(data.error || "Không thể thêm sinh viên.");
       }
     } catch {
-      setUploadError("Loi ket noi may chu khi them sinh vien.");
+      setUploadError("Lỗi kết nối máy chủ khi thêm sinh viên.");
     } finally {
       setIsAddingStudent(false);
     }
@@ -1447,6 +1484,171 @@ export default function TeacherDashboard() {
   const logout = () => {
     localStorage.clear();
     router.push("/login");
+  };
+
+  useEffect(() => {
+    const storedWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+    if (Number.isFinite(storedWidth) && storedWidth > 0) {
+      setSidebarWidth(clampSidebarWidth(storedWidth));
+    }
+  }, []);
+
+  const handleSidebarResizeStart = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (window.innerWidth <= 900) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsSidebarCollapsed(false);
+
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    let nextWidth = startWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      nextWidth = clampSidebarWidth(startWidth + moveEvent.clientX - startX);
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth));
+      document.body.classList.remove("is-sidebar-resizing");
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.body.classList.add("is-sidebar-resizing");
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const resetSidebarWidth = () => {
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(DEFAULT_SIDEBAR_WIDTH));
+  };
+
+  const renderStudentRoster = () => {
+    const selectedRoster =
+      classRosters.find((roster) => roster.name === selectedClassName) ||
+      classRosters[0] ||
+      null;
+    const rosterStudents = selectedRoster?.students || students;
+    const rosterTitle = selectedRoster ? `Lớp ${selectedRoster.name}` : "Danh sách sinh viên";
+    const rosterQuery = rosterSearch.trim().toLowerCase();
+    const visibleStudents = rosterQuery
+      ? rosterStudents.filter((student) => (
+        [student.mssv, student.name, student.email]
+          .join(" ")
+          .toLowerCase()
+          .includes(rosterQuery)
+      ))
+      : rosterStudents;
+    const exportVisibleRoster = () => {
+      const rows = [
+        ["MSSV", "Ho ten", "Email"],
+        ...visibleStudents.map((student) => [student.mssv || "", student.name || "", student.email || ""]),
+      ];
+      const csv = `\uFEFF${rows.map((row) => (
+        row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")
+      )).join("\r\n")}`;
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${selectedRoster?.name || "danh-sach-sinh-vien"}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    };
+
+    return (
+      <div className="student-roster-card">
+        <div className="student-roster-header">
+          <div>
+            <span className="student-roster-eyebrow">Danh sách sinh viên</span>
+            <h4>{rosterTitle}</h4>
+          </div>
+          <span className="student-roster-count">{rosterStudents.length} sinh viên</span>
+        </div>
+
+        {classRosters.length > 1 && (
+          <div className="class-roster-tabs" aria-label="Chọn lớp">
+            {classRosters.map((roster) => (
+              <button
+                key={roster.name}
+                type="button"
+                className={selectedRoster?.name === roster.name ? "active" : ""}
+                onClick={() => setSelectedClassName(roster.name)}
+              >
+                <span className="class-roster-name">{roster.name}</span>
+                <span className="class-roster-count">{roster.student_count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="student-roster-toolbar">
+          <label className="student-roster-search">
+            <span>Tìm kiếm</span>
+            <input
+              value={rosterSearch}
+              onChange={(event) => setRosterSearch(event.target.value)}
+              placeholder="Tìm MSSV, họ tên, email"
+            />
+          </label>
+          <div className="student-roster-actions">
+            <span>
+              Hiển thị {visibleStudents.length}/{rosterStudents.length}
+            </span>
+            {rosterSearch && (
+              <button type="button" onClick={() => setRosterSearch("")}>
+                Xóa tìm
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedAssignmentId) fetchStudents(selectedAssignmentId);
+              }}
+            >
+              Làm mới
+            </button>
+            <button type="button" onClick={exportVisibleRoster} disabled={visibleStudents.length === 0}>
+              Xuất CSV
+            </button>
+          </div>
+        </div>
+
+        {isLoadingStudents && <div className="student-roster-state">Đang tải danh sách sinh viên...</div>}
+        {!isLoadingStudents && rosterStudents.length === 0 && (
+          <div className="student-roster-state">Chưa có sinh viên trong bài tập này.</div>
+        )}
+        {!isLoadingStudents && rosterStudents.length > 0 && visibleStudents.length === 0 && (
+          <div className="student-roster-state">Không tìm thấy sinh viên phù hợp.</div>
+        )}
+        {!isLoadingStudents && visibleStudents.length > 0 && (
+          <div className="student-roster-table-wrap">
+            <table className="student-roster-table">
+              <thead>
+                <tr>
+                  <th>MSSV</th>
+                  <th>Họ tên</th>
+                  <th>Email</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleStudents.map((student) => (
+                  <tr key={student.id || `${student.mssv}-${student.email}`}>
+                    <td>{student.mssv || "-"}</td>
+                    <td>{student.name || "Chưa có tên"}</td>
+                    <td>{student.email || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -1470,7 +1672,10 @@ export default function TeacherDashboard() {
       </header>
 
       <div className="sidebar-layout">
-        <aside className={`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
+        <aside
+          className={`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}
+          style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+        >
           <div className="sidebar-top">
             <button
               type="button"
@@ -1486,9 +1691,9 @@ export default function TeacherDashboard() {
             <div className="sidebar-title">Menu quản lý</div>
           </div>
           <nav className="sidebar-nav">
-            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Quản lý bài tập lớn">
+            <button className={`sidebar-link ${activeTab === "assignments" ? "active" : ""}`} onClick={() => setActiveTab("assignments")} title="Quản lý bài tập">
               <span className="sidebar-icon assignment" aria-hidden="true"></span>
-              <span className="sidebar-label">Quản lý bài tập lớn</span>
+              <span className="sidebar-label">Quản lý bài tập</span>
             </button>
             <button style={{ display: "none" }} className={`sidebar-link ${activeTab === "import" ? "active" : ""}`} onClick={() => setActiveTab("import")} title="Đăng ký sinh viên">
               <span className="sidebar-icon import" aria-hidden="true"></span>
@@ -1507,6 +1712,14 @@ export default function TeacherDashboard() {
               <span className="sidebar-label">Thống kê survey</span>
             </button>
           </nav>
+          <button
+            type="button"
+            className="sidebar-resize-handle"
+            aria-label="Kéo để đổi chiều rộng menu"
+            title="Kéo để đổi chiều rộng menu"
+            onMouseDown={handleSidebarResizeStart}
+            onDoubleClick={resetSidebarWidth}
+          />
         </aside>
 
         <main className="content-area">
@@ -1514,8 +1727,7 @@ export default function TeacherDashboard() {
             <div className="teacher-dashboard">
               <div className="teacher-page-toolbar teacher-assignment-toolbar">
                 <div>
-                  <span className="teacher-assignment-eyebrow">Assignment studio</span>
-                  <h1>Bài tập lớn</h1>
+                  <h1>Quản lý bài tập</h1>
                 </div>
                 <button className="btn btn-primary" onClick={openCreateAssignment}>
                   Tạo bài tập
@@ -1524,20 +1736,19 @@ export default function TeacherDashboard() {
 
               <section className="teacher-assignment-stats" aria-label="Tổng quan bài tập lớn">
                 <div>
-                  <span>Tất cả</span>
+                  <span>Tổng bài tập</span>
                   <strong>{assignments.length}</strong>
+                  <small>Tất cả bài tập đang quản lý</small>
                 </div>
                 <div>
                   <span>Đang mở</span>
                   <strong>{openAssignmentCount}</strong>
+                  <small>Sinh viên còn có thể nộp bài</small>
                 </div>
                 <div>
-                  <span>Đóng</span>
+                  <span>Đã đóng</span>
                   <strong>{closedAssignmentCount}</strong>
-                </div>
-                <div>
-                  <span>TC sinh</span>
-                  <strong>{generatedTotal}</strong>
+                  <small>Đã hết hạn hoặc ngừng nhận bài</small>
                 </div>
               </section>
 
@@ -1564,11 +1775,6 @@ export default function TeacherDashboard() {
                     <strong>{languageCount}</strong>
                     <small>Ngôn ngữ hỗ trợ</small>
                   </div>
-                  <div className="teacher-metric-tile">
-                    <span>TC sinh thêm</span>
-                    <strong>{generatedTotal}</strong>
-                    <small>Testcase generated</small>
-                  </div>
                 </div>
               </section>
 
@@ -1576,7 +1782,6 @@ export default function TeacherDashboard() {
                 <Metric label="Tổng bài" value={assignments.length} />
                 <Metric label="Dạng bài" value={assignmentTypeCount} />
                 <Metric label="Ngôn ngữ" value={languageCount} />
-                <Metric label="TC sinh thêm" value={generatedTotal} />
               </div>
 
               <div className="assignment-workbench teacher-assignment-workspace">
@@ -1657,7 +1862,6 @@ export default function TeacherDashboard() {
                           className={`teacher-assignment-row ${isSelected ? "selected" : ""}`}
                           onClick={() => setSelectedAssignmentId(asm.id)}
                         >
-                          <span className={`teacher-assignment-status-dot ${status.toLowerCase()}`} aria-hidden="true"></span>
                           <span className="teacher-assignment-row-main">
                             <strong>{asm.name}</strong>
                             <small>{typeLabel(asm.assignment_type)}</small>
@@ -1680,9 +1884,6 @@ export default function TeacherDashboard() {
                     <>
                       <div className="teacher-assignment-detail-card">
                         <div className="teacher-assignment-detail-kicker">
-                          <span className={`teacher-assignment-row-state ${selectedStatus.toLowerCase()}`}>
-                            {selectedStatus === "OPEN" ? "Đang mở" : "Đã đóng"}
-                          </span>
                           <span>{typeLabel(selectedAssignment.assignment_type)}</span>
                         </div>
 
@@ -1699,6 +1900,10 @@ export default function TeacherDashboard() {
 
                       <div className="teacher-assignment-meta-grid">
                         <div>
+                          <span>Trạng thái</span>
+                          <strong>{selectedStatus === "OPEN" ? "Đang mở" : "Đã đóng"}</strong>
+                        </div>
+                        <div>
                           <span>Ngôn ngữ</span>
                           <strong>{languageLabel(selectedAssignment.supported_languages)}</strong>
                         </div>
@@ -1714,12 +1919,8 @@ export default function TeacherDashboard() {
 
                       <div className="teacher-assignment-testcases">
                         <div>
-                          <span>Seed</span>
-                          <strong>{selectedAssignment.testcase_seed_count || 0}</strong>
-                        </div>
-                        <div>
-                          <span>Sinh thêm</span>
-                          <strong>{selectedAssignment.generated_testcase_count || 0}</strong>
+                          <span>Testcase mẫu</span>
+                          <strong>{selectedAssignment.testcase_seed_count || 0} bộ</strong>
                         </div>
                       </div>
                       </div>
@@ -1727,7 +1928,7 @@ export default function TeacherDashboard() {
                       <div className="assignment-people-panel">
                         <div className="panel-title-row">
                           <div>
-                            <h3>Lớp học</h3>
+                            <h3>Quản lý lớp học</h3>
                           </div>
                           <span className="panel-count-pill">{students.length} sinh viên</span>
                         </div>
@@ -1753,7 +1954,7 @@ export default function TeacherDashboard() {
                                 />
                                 <input
                                   className="form-control"
-                                  placeholder="Ho ten"
+                                  placeholder="Họ tên"
                                   value={studentForm.name}
                                   onChange={(e) => setStudentForm((current) => ({ ...current, name: e.target.value }))}
                                 />
@@ -1766,10 +1967,10 @@ export default function TeacherDashboard() {
                                 />
                               </div>
                               <button type="submit" className="btn btn-secondary" disabled={isAddingStudent || !selectedAssignmentId}>
-                                {isAddingStudent ? "Dang them..." : "Them sinh vien"}
+                                {isAddingStudent ? "Đang thêm..." : "Thêm sinh viên"}
                               </button>
                             </form>
-                            <div className="people-tool-divider"><span>hoac import danh sach</span></div>
+                            <div className="people-tool-divider"><span>hoặc nhập danh sách</span></div>
                             <input
                               type="file"
                               accept=".csv,.xlsx,.xls"
@@ -1779,11 +1980,11 @@ export default function TeacherDashboard() {
                               style={{ display: "none" }}
                             />
                             <label htmlFor="assignment-roster-file-workbench" className="upload-strip">
-                              <strong>{selectedFile?.name || "Chọn file CSV/XLSX"}</strong>
+                              <strong>{selectedFile?.name || "Chọn tệp CSV/XLSX"}</strong>
                               <span>MSSV, họ tên, email</span>
                             </label>
                             <button className="btn btn-primary" onClick={handleCSVUpload} disabled={!selectedFile || isUploading}>
-                              {isUploading ? "Đang xử lý..." : "Import"}
+                              {isUploading ? "Đang xử lý..." : "Nhập danh sách"}
                             </button>
                           </div>
                           <div className="people-tool">
@@ -1806,39 +2007,7 @@ export default function TeacherDashboard() {
                         </div>
                         {uploadMessage && <div className="notice success">{uploadMessage}</div>}
                         {uploadError && <div className="notice danger">{uploadError}</div>}
-                        <div className="student-mini-table">
-                          {isLoadingStudents && <p>Đang tải danh sách sinh viên...</p>}
-                          {!isLoadingStudents && students.length === 0 && <p>Chưa có sinh viên trong bài tập này.</p>}
-                          {!isLoadingStudents && classRosters.length > 0 && (
-                            <div className="class-roster-tabs">
-                              {classRosters.map((roster) => (
-                                <button
-                                  key={roster.name}
-                                  className={selectedClassName === roster.name ? "active" : ""}
-                                  onClick={() => setSelectedClassName(roster.name)}
-                                >
-                                  {roster.name} <span>{roster.student_count}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                          {!isLoadingStudents && students.length > 0 && (
-                            <table className="mock-table">
-                              <thead>
-                                <tr><th>MSSV</th><th>Họ tên</th><th>Email</th></tr>
-                              </thead>
-                              <tbody>
-                                {(classRosters.find((roster) => roster.name === selectedClassName)?.students || students).slice(0, 8).map((student) => (
-                                  <tr key={student.id}>
-                                    <td>{student.mssv}</td>
-                                    <td>{student.name}</td>
-                                    <td>{student.email}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
+                        {renderStudentRoster()}
                       </div>
                     </>
                       );
@@ -1853,7 +2022,6 @@ export default function TeacherDashboard() {
 
               <div className="assignment-command-panel" style={{ display: "none" }}>
                 <div>
-                  <span className="eyebrow">Assignment Studio</span>
                   <h2>Luồng tạo bài mới</h2>
                   <p>Chọn dạng bài, ngôn ngữ hỗ trợ, import testcase mẫu và cấu hình bộ sinh testcase trước khi giao bài.</p>
                 </div>
@@ -1896,11 +2064,11 @@ export default function TeacherDashboard() {
                         style={{ display: "none" }}
                       />
                       <label htmlFor="assignment-roster-file" className="upload-strip">
-                        <strong>{selectedFile?.name || "Chọn file CSV/XLSX"}</strong>
+                        <strong>{selectedFile?.name || "Chọn tệp CSV/XLSX"}</strong>
                         <span>MSSV, Họ tên, Email</span>
                       </label>
                       <button className="btn btn-primary" onClick={handleCSVUpload} disabled={!selectedFile || isUploading}>
-                        {isUploading ? "Đang xử lý..." : "Import"}
+                        {isUploading ? "Đang xử lý..." : "Nhập danh sách"}
                       </button>
                     </div>
                     <div className="people-tool">
@@ -1923,39 +2091,7 @@ export default function TeacherDashboard() {
                   </div>
                   {uploadMessage && <div className="notice success">{uploadMessage}</div>}
                   {uploadError && <div className="notice danger">{uploadError}</div>}
-                  <div className="student-mini-table">
-                    {isLoadingStudents && <p>Đang tải danh sách sinh viên...</p>}
-                    {!isLoadingStudents && students.length === 0 && <p>Chưa có sinh viên trong bài tập này.</p>}
-                    {!isLoadingStudents && classRosters.length > 0 && (
-                      <div className="class-roster-tabs">
-                        {classRosters.map((roster) => (
-                          <button
-                            key={roster.name}
-                            className={selectedClassName === roster.name ? "active" : ""}
-                            onClick={() => setSelectedClassName(roster.name)}
-                          >
-                            {roster.name} <span>{roster.student_count}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {!isLoadingStudents && students.length > 0 && (
-                      <table className="mock-table">
-                        <thead>
-                          <tr><th>MSSV</th><th>Họ tên</th><th>Email</th></tr>
-                        </thead>
-                        <tbody>
-                          {(classRosters.find((roster) => roster.name === selectedClassName)?.students || students).slice(0, 12).map((student) => (
-                            <tr key={student.id}>
-                              <td>{student.mssv}</td>
-                              <td>{student.name}</td>
-                              <td>{student.email}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                  {renderStudentRoster()}
                 </div>
               )}
 
@@ -1987,8 +2123,7 @@ export default function TeacherDashboard() {
                     <p style={{ color: "hsl(var(--text-secondary))", fontSize: "0.95rem", marginBottom: "1rem" }}>{asm.description}</p>
                     <div className="assignment-meta-grid">
                       <Info label="Ngôn ngữ" value={languageLabel(asm.supported_languages)} />
-                      <Info label="Testcase mẫu" value={`${asm.testcase_seed_count || 0} seed`} />
-                      <Info label="Sinh thêm" value={`${asm.generated_testcase_count || 0} testcase`} />
+                      <Info label="Testcase mẫu" value={`${asm.testcase_seed_count || 0} bộ`} />
                       <Info label="Chiến lược" value={strategyLabel(asm.testcase_generation_strategy)} />
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", color: "hsl(var(--text-muted))", marginTop: "1rem" }}>
@@ -2328,7 +2463,7 @@ export default function TeacherDashboard() {
                 <div className="form-group assignment-type-section">
                   <label className="form-label">Dạng bài</label>
                   <div className="assignment-type-grid">
-                    {ASSIGNMENT_TYPES.map((type) => (
+                    {VISIBLE_ASSIGNMENT_TYPES.map((type) => (
                       <button
                         key={type.value}
                         type="button"
@@ -2350,15 +2485,6 @@ export default function TeacherDashboard() {
                         <span>{getAssignmentFlow(type.value).summary}</span>
                       </button>
                     ))}
-                  </div>
-                  <div className="assignment-flow-summary">
-                    <strong>{assignmentFlow.label}</strong>
-                    <span>{assignmentFlow.summary}</span>
-                    <div>
-                      {assignmentFlow.requirements.map((item) => (
-                        <em key={item}>{item}</em>
-                      ))}
-                    </div>
                   </div>
                 </div>
                 <div className="form-group">
@@ -2398,7 +2524,9 @@ export default function TeacherDashboard() {
                       <div className="question-list-heading-row">
                         <div>
                           <label className="form-label">{newType === "QUIZ_CODE" ? "Danh sách câu trắc nghiệm" : "Danh sách câu hỏi lập trình"}</label>
-                          <p className="field-hint">{newType === "QUIZ_CODE" ? "Mỗi câu có 4 đáp án, chọn một đáp án đúng." : "Mỗi câu có đề riêng, điểm riêng và lời giải chuẩn riêng."}</p>
+                          {newType === "QUIZ_CODE" && (
+                            <p className="field-hint">Mỗi câu có 4 đáp án, chọn một đáp án đúng.</p>
+                          )}
                         </div>
                         <button type="button" className="btn btn-secondary" onClick={addQuestionItem}>
                           Thêm câu hỏi
@@ -2436,7 +2564,7 @@ export default function TeacherDashboard() {
                                   className="form-control"
                                   value={question.title}
                                   onChange={(e) => updateQuestionItem(questionIndex, "title", e.target.value)}
-                                  placeholder="VD: In mảng một chiều"
+                                  placeholder="Nhập tiêu đề ngắn"
                                 />
                               </label>
                               <label>
@@ -2458,7 +2586,7 @@ export default function TeacherDashboard() {
                                 value={question.prompt}
                                 onChange={(e) => updateQuestionItem(questionIndex, "prompt", e.target.value)}
                                 rows={4}
-                                placeholder={newType === "QUIZ_CODE" ? "Ví dụ: Độ phức tạp của thuật toán binary search là gì?" : "Ví dụ: Define a function named ArrayShow to show elements of an integer array, size n."}
+                                placeholder={newType === "QUIZ_CODE" ? "Ví dụ: Độ phức tạp của thuật toán binary search là gì?" : "Ví dụ: Viết chương trình đọc n và in các số từ 1 đến n."}
                               />
                             </label>
                             {newType === "QUIZ_CODE" ? (
@@ -2490,17 +2618,17 @@ export default function TeacherDashboard() {
                                     value={question.starterCode}
                                     onChange={(e) => updateQuestionItem(questionIndex, "starterCode", e.target.value)}
                                     rows={4}
-                                    placeholder="Ví dụ: void ArrayShow(int a[], int n) { ... }"
+                                    placeholder={"Ví dụ:\n#include <stdio.h>\n\nint main(void) {\n  int n;\n  scanf(\"%d\", &n);\n  // viết lời giải tại đây\n  return 0;\n}"}
                                   />
                                 </label>
                                 <label className="question-builder-field">
-                                  <span>Đáp án chuẩn / ghi chú chấm</span>
+                                  <span>Đáp án chuẩn</span>
                                   <textarea
                                     className="form-control testcase-textarea"
                                     value={question.referenceAnswer}
                                     onChange={(e) => updateQuestionItem(questionIndex, "referenceAnswer", e.target.value)}
                                     rows={4}
-                                    placeholder="Dán lời giải tham chiếu hoặc mô tả output đúng."
+                                    placeholder="Output đúng"
                                   />
                                 </label>
                               </>
@@ -2514,20 +2642,12 @@ export default function TeacherDashboard() {
                               </div>
                             ) : (
                               <div className="question-testcase-panel">
-                                <div className="testcase-pair-header">
-                                  <div>
-                                    <label className="form-label">Testcase của câu này</label>
-                                    <span className="testcase-count-line">
-                                      {question.testcases.filter(isSampleTestcase).length} hiển thị · {question.testcases.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn
-                                    </span>
-                                  </div>
-                                </div>
                                 <TestcaseGroupEditor
                                   pairs={question.testcases}
                                   keyPrefix={question.id}
-                                  inputLabel="Test"
+                                  inputLabel="Input"
                                   expectedLabel="Expected"
-                                  inputPlaceholder="int n = 5; int Arr[] = {1,2,3,4,5}; ArrayShow(Arr,n);"
+                                  inputPlaceholder="5"
                                   expectedPlaceholder="1 2 3 4 5"
                                   canRemove={question.testcases.length > 1}
                                   onAdd={(visibility) => addQuestionTestcase(questionIndex, visibility)}
@@ -2557,81 +2677,23 @@ export default function TeacherDashboard() {
                   <div className="assignment-testcase-builder question-testcase-summary-panel">
                     <div className="panel-title-row">
                       <div>
-                        <h4>{newType === "QUIZ_CODE" ? "Chấm trắc nghiệm" : "Testcase & gợi ý"}</h4>
-                        <p>
-                          {newType === "QUIZ_CODE"
-                            ? "Trắc nghiệm được chấm theo đáp án đúng A/B/C/D đã chọn ở từng câu."
-                            : "Testcase được lấy trực tiếp từ từng câu hỏi. Có thể xem nhanh seed và preview testcase sinh thêm tại đây."}
-                        </p>
+                        <h4>{newType === "QUIZ_CODE" ? "Chấm trắc nghiệm" : "Tổng testcase"}</h4>
+                        {newType === "QUIZ_CODE" && (
+                          <p>Trắc nghiệm được chấm theo đáp án đúng A/B/C/D đã chọn ở từng câu.</p>
+                        )}
                       </div>
                       <span>
                         {newType === "QUIZ_CODE"
                           ? `${questionItems.length} câu`
-                          : `${questionSampleCount} hiển thị · ${questionHiddenCount} chấm ẩn · ${generatedCount} sinh thêm`}
+                          : `${questionTestcases.length} testcase`}
                       </span>
                     </div>
 
                     {newType !== "QUIZ_CODE" && (
-                      <>
-                        <div className="question-testcase-controls">
-                          <label>
-                            <span>Chiến lược sinh</span>
-                            <select
-                              className="form-control"
-                              value={generationStrategy}
-                              onChange={(e) => setGenerationStrategy(e.target.value as GenerationStrategy)}
-                            >
-                              {GENERATION_STRATEGIES.map((strategy) => (
-                                <option key={strategy.value} value={strategy.value}>
-                                  {strategy.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            <span>Số testcase sinh thêm</span>
-                            <input
-                              className="form-control"
-                              type="number"
-                              min={0}
-                              max={500}
-                              value={generatedCount}
-                              onChange={(e) => setGeneratedCount(Number(e.target.value))}
-                            />
-                          </label>
-                        </div>
-
-                        <div className="question-testcase-preview-grid">
-                          <div>
-                            <div className="compact-section-heading">
-                              <div>
-                                <h4>Testcase đã nhập</h4>
-                                <p>Dữ liệu hệ thống dùng để chấm và làm mẫu sinh thêm.</p>
-                              </div>
-                              <span className="panel-count-pill">{questionTestcases.length} testcase</span>
-                            </div>
-                            {questionTestcases.length > 0 ? (
-                              <pre>{questionTestcases.slice(0, 8).map((pair, index) => `Câu ${pair.question || "-"} / Testcase ${index + 1}\nInput: ${pair.input || "Không có input"}\nExpected: ${pair.expected || "Chưa có expected"}`).join("\n\n")}</pre>
-                            ) : (
-                              <div className="testcase-preview-empty">Chưa có testcase nào. Hãy thêm Input và Expected trong từng câu hỏi bên dưới.</div>
-                            )}
-                          </div>
-                          <div>
-                            <div className="compact-section-heading">
-                              <div>
-                                <h4>Testcase dự kiến sinh thêm</h4>
-                                <p>Dựa trên testcase đã nhập và chiến lược đang chọn.</p>
-                              </div>
-                              <span>{strategyLabel(generationStrategy)}</span>
-                            </div>
-                            {questionGeneratedPreview.length > 0 ? (
-                              <pre>{questionGeneratedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n")}</pre>
-                            ) : (
-                              <div className="testcase-preview-empty">Chưa thể sinh preview. Cần ít nhất một testcase đã nhập.</div>
-                            )}
-                          </div>
-                        </div>
-                      </>
+                      <div className="question-testcase-summary-strip">
+                        <span><strong>{questionSampleCount}</strong> hiển thị</span>
+                        <span><strong>{questionHiddenCount}</strong> chấm ẩn</span>
+                      </div>
                     )}
 
                   </div>
@@ -2695,7 +2757,7 @@ export default function TeacherDashboard() {
                 <div className="builder-step-heading">
                   <div>
                     <strong>Testcase và chấm điểm</strong>
-                    <p>{assignmentFlow.requireTestcases ? "Dạng bài này cần testcase mẫu để chấm tự động và sinh thêm biến thể." : "Dạng bài này không bắt buộc testcase; chỉ nhập khi cần kiểm chứng tự động."}</p>
+                    <p>{assignmentFlow.requireTestcases ? "Dạng bài này cần testcase mẫu để chấm tự động. Hệ thống có thể tự tạo thêm biến thể từ các testcase đó." : "Dạng bài này không bắt buộc testcase; chỉ nhập khi cần kiểm chứng tự động."}</p>
                   </div>
                 </div>
                 <div className="assignment-testcase-builder">
@@ -2704,7 +2766,7 @@ export default function TeacherDashboard() {
                       <h4>{assignmentFlow.testcaseTitle}</h4>
                       <p>{assignmentFlow.testcaseHint}</p>
                     </div>
-                    <span>{assignmentFlow.requireTestcases ? `${seedCount} seed + ${generatedCount} sinh thêm` : "Tùy chọn"}</span>
+                    <span>{assignmentFlow.requireTestcases ? `${seedCount} testcase mẫu + ${generatedCount} tự tạo` : "Tùy chọn"}</span>
                   </div>
                   <div className="testcase-builder-grid">
                     <div>
@@ -2725,7 +2787,7 @@ export default function TeacherDashboard() {
                         </select>
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Số testcase sinh thêm</label>
+                        <label className="form-label">Số testcase tự tạo thêm</label>
                         <input
                           className="form-control"
                           type="number"
@@ -2769,7 +2831,7 @@ export default function TeacherDashboard() {
                   {assignmentFlow.requireTestcases && (
                   <div className="generated-preview">
                     <div className="panel-title-row">
-                      <strong>Preview testcase sinh thêm</strong>
+                      <strong>Xem trước testcase tự tạo</strong>
                       <span>{strategyLabel(generationStrategy)}</span>
                     </div>
                     <pre>{generatedPreview.map((pair) => `${pair.input} -> ${pair.expected}`).join("\n") || "Thêm testcase mẫu để xem preview."}</pre>
@@ -2813,7 +2875,7 @@ export default function TeacherDashboard() {
                             ? `${questionSampleCount} hiển thị · ${questionHiddenCount} chấm ẩn`
                             : `${testcasePairs.filter(isSampleTestcase).length} hiển thị · ${testcasePairs.filter((pair) => !isSampleTestcase(pair)).length} chấm ẩn`}
                         </strong>
-                        <p>{generatedCount} testcase sinh thêm</p>
+                        <p>{isQuestionSetAssignment ? `${questionTestcases.length} testcase đã nhập từ các câu hỏi` : `${generatedCount} testcase tự tạo thêm`}</p>
                       </section>
                     </div>
                   </div>

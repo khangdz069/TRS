@@ -167,21 +167,17 @@ public class GraderService {
             return gradeQuestionAnswers(workspacePath, request, questionAnswers);
         }
 
-        List<String> cppFiles = findAllCppFiles(workspacePath);
-        if (cppFiles.isEmpty()) {
+        List<String> sourceFiles = findAllSourceFiles(workspacePath);
+        if (sourceFiles.isEmpty()) {
             return new GraderResponse("FAILED", Map.of(), Map.of(), "No C/C++ source files found.", null);
         }
 
         Path executablePath = workspacePath.resolve(executableName());
-        List<String> compileCommand = new ArrayList<>();
-        compileCommand.add("g++");
-        compileCommand.add("-g");
-        compileCommand.add("-o");
-        compileCommand.add(executablePath.getFileName().toString());
-        compileCommand.addAll(cppFiles);
-        compileCommand.add("-I");
-        compileCommand.add(".");
-        compileCommand.add("-std=c++11");
+        List<String> compileCommand = buildCompileCommand(
+                executablePath.getFileName().toString(),
+                sourceFiles,
+                shouldUseCCompiler(sourceFiles)
+        );
 
         logger.info("Custom testcase compilation command: {}", String.join(" ", compileCommand));
         ProcessResult compileResult = runProcess(compileCommand, workspacePath, COMPILE_TIMEOUT);
@@ -291,12 +287,18 @@ public class GraderService {
                 continue;
             }
 
-            Path sourcePath = workspacePath.resolve("question_" + testcase.safeQuestion() + "_tc_" + (index + 1) + ".cpp");
+            boolean useCCompiler = !isLikelyCppSource(answer);
+            Path sourcePath = workspacePath.resolve("question_" + testcase.safeQuestion() + "_tc_" + (index + 1) + (useCCompiler ? ".c" : ".cpp"));
             Path executablePath = workspacePath.resolve("question_" + testcase.safeQuestion() + "_tc_" + (index + 1) + executableName());
-            Files.writeString(sourcePath, buildHarnessSource(answer, testcase.safeInput()), StandardCharsets.UTF_8);
+            boolean fullProgramAnswer = containsMainFunction(answer);
+            Files.writeString(
+                    sourcePath,
+                    fullProgramAnswer ? buildFullProgramSource(answer, useCCompiler) : buildHarnessSource(answer, testcase.safeInput(), useCCompiler),
+                    StandardCharsets.UTF_8
+            );
 
             ProcessResult compileResult = runProcess(
-                    List.of("g++", "-g", "-o", executablePath.getFileName().toString(), sourcePath.getFileName().toString(), "-I", ".", "-std=c++11"),
+                    buildCompileCommand(executablePath.getFileName().toString(), List.of(sourcePath.getFileName().toString()), useCCompiler),
                     workspacePath,
                     COMPILE_TIMEOUT
             );
@@ -313,7 +315,9 @@ public class GraderService {
                 continue;
             }
 
-            ProcessResult runResult = runProcess(List.of(executablePath.toAbsolutePath().toString()), workspacePath, TESTCASE_TIMEOUT);
+            ProcessResult runResult = fullProgramAnswer
+                    ? runProcessWithInput(List.of(executablePath.toAbsolutePath().toString()), workspacePath, TESTCASE_TIMEOUT, testcase.safeInput())
+                    : runProcess(List.of(executablePath.toAbsolutePath().toString()), workspacePath, TESTCASE_TIMEOUT);
             if (runResult.timedOut()) {
                 String errorMessage = "tc" + testcaseKey + " execution timed out (limit: 5s)";
                 scores.put(testcaseKey, false);
@@ -342,14 +346,62 @@ public class GraderService {
         return new GraderResponse("SUCCESS", scores, failedOutputs, null, runtimeErrorSummary);
     }
 
-    private String buildHarnessSource(String answer, String testSnippet) {
-        String header = answer.contains("#include")
-                ? ""
-                : "#include <bits/stdc++.h>\nusing namespace std;\n";
-        return header + answer + "\nint main() {\n" + testSnippet + "\nreturn 0;\n}\n";
+    private String buildHarnessSource(String answer, String testSnippet, boolean cMode) {
+        String header = buildDefaultHeader(answer, cMode);
+        String mainSignature = cMode ? "int main(void)" : "int main()";
+        return header + answer + "\n" + mainSignature + " {\n" + normalizeHarnessSnippet(testSnippet) + "\nreturn 0;\n}\n";
     }
 
-    private List<String> findAllCppFiles(Path workspacePath) throws IOException {
+    private String buildFullProgramSource(String answer, boolean cMode) {
+        return buildDefaultHeader(answer, cMode) + answer.strip() + "\n";
+    }
+
+    private String buildDefaultHeader(String source, boolean cMode) {
+        if (source.contains("#include")) return "";
+        return cMode ? "#include <stdio.h>\n" : "#include <bits/stdc++.h>\nusing namespace std;\n";
+    }
+
+    private List<String> buildCompileCommand(String executableName, List<String> sourceFiles, boolean cMode) {
+        List<String> compileCommand = new ArrayList<>();
+        compileCommand.add(cMode ? "gcc" : "g++");
+        compileCommand.add("-g");
+        compileCommand.add("-o");
+        compileCommand.add(executableName);
+        compileCommand.addAll(sourceFiles);
+        compileCommand.add("-I");
+        compileCommand.add(".");
+        compileCommand.add(cMode ? "-std=c11" : "-std=c++11");
+        return compileCommand;
+    }
+
+    private boolean shouldUseCCompiler(List<String> sourceFiles) {
+        return !sourceFiles.isEmpty() && sourceFiles.stream().allMatch(name -> name.endsWith(".c"));
+    }
+
+    private boolean isLikelyCppSource(String source) {
+        String value = source == null ? "" : source;
+        return value.contains("#include <bits/stdc++.h>")
+                || value.contains("#include <iostream>")
+                || value.contains("using namespace std")
+                || value.contains("std::")
+                || value.matches("(?s).*\\b(cin|cout|cerr|clog)\\b.*")
+                || value.matches("(?s).*\\b(class|template|namespace)\\b.*")
+                || value.matches("(?s).*\\b(vector|string|map|set|queue|stack)\\s*<.*");
+    }
+
+    private boolean containsMainFunction(String source) {
+        return source != null && source.matches("(?s).*\\bmain\\s*\\([^;{}]*\\)\\s*\\{.*");
+    }
+
+    private String normalizeHarnessSnippet(String testSnippet) {
+        String snippet = testSnippet == null ? "" : testSnippet.strip();
+        if (snippet.isEmpty() || snippet.endsWith(";") || snippet.endsWith("}")) {
+            return snippet;
+        }
+        return snippet + "\n;";
+    }
+
+    private List<String> findAllSourceFiles(Path workspacePath) throws IOException {
         try (Stream<Path> paths = Files.list(workspacePath)) {
             return paths
                     .filter(Files::isRegularFile)

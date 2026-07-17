@@ -340,7 +340,7 @@ public class AssignmentController {
 
     private static String normalizeLanguages(String value) {
         if (value == null || value.isBlank()) {
-            return "cpp";
+            return "c";
         }
         return java.util.Arrays.stream(value.split(","))
                 .map(String::trim)
@@ -349,7 +349,7 @@ public class AssignmentController {
                 .distinct()
                 .limit(12)
                 .reduce((left, right) -> left + "," + right)
-                .orElse("cpp");
+                .orElse("c");
     }
 
     private static int nonNegative(Integer value) {

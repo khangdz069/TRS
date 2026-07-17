@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { useState, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 
 interface Assignment {
@@ -127,6 +127,20 @@ type TrialResult = {
   runtime_error?: string | null;
   error?: string;
 };
+type QuestionEditorSize = "compact" | "normal" | "large" | "focus";
+
+const QUESTION_EDITOR_SIZE_OPTIONS: { value: QuestionEditorSize; label: string }[] = [
+  { value: "compact", label: "Gọn" },
+  { value: "normal", label: "Vừa" },
+  { value: "large", label: "Rộng" },
+  { value: "focus", label: "Tập trung" },
+];
+const QUESTION_EDITOR_SIZE_INDEX: Record<QuestionEditorSize, number> = {
+  compact: 0,
+  normal: 1,
+  large: 2,
+  focus: 3,
+};
 
 const STUDENT_ASSIGNMENT_FLOW: Record<AssignmentType, {
   label: string;
@@ -148,9 +162,9 @@ const STUDENT_ASSIGNMENT_FLOW: Record<AssignmentType, {
     workLabel: "Bạn cần làm gì?",
     workHint: "Viết chương trình giải đúng yêu cầu đề bài. Nên tự chạy với ví dụ trước khi nộp.",
     editorLabel: "Mã nguồn lời giải",
-    editorPlaceholder: "// Viết lời giải của bạn tại đây",
+    editorPlaceholder: "// Code ở đây",
     fileHint: "Nộp file source hoặc zip chứa các file cần chấm.",
-    submitLabel: "Nộp lời giải",
+    submitLabel: "Nộp bài giải",
     primaryMaterialLabel: "Đề bài",
     configLabel: "Cấu hình chấm",
     testcaseLabel: "Testcase mẫu",
@@ -238,8 +252,25 @@ const languageLabel = (values?: string[]) => {
   return values.map((value) => labels[value] || value).join(", ");
 };
 
+const sourceFileNameForAssignment = (assignment?: Assignment | null) => {
+  if (!assignment) return "solution.c";
+  if (assignment.assignment_type === "QUIZ_CODE") return "answer.txt";
+  if (assignment.assignment_type === "PROJECT") return "README.md";
+  const languages = assignment.supported_languages || [];
+  if (languages.includes("c")) return "solution.c";
+  if (languages.includes("cpp")) return "solution.cpp";
+  if (languages.includes("java")) return "Main.java";
+  if (languages.includes("python")) return "solution.py";
+  if (languages.includes("javascript")) return "solution.js";
+  if (languages.includes("typescript")) return "solution.ts";
+  return "solution.c";
+};
+
 const contentPreview = (value?: string, fallback = "Chưa có nội dung.") =>
   value && value.trim() ? value : fallback;
+
+const isDefaultQuestionPrompt = (value?: string) =>
+  ["viết lời giải cho yêu cầu dưới đây.", "viết lời giải cho yêu cầu dưới đây"].includes(String(value || "").trim().toLowerCase());
 
 const normalizeTestcasePair = (item: Partial<TestcasePair> | undefined): TestcasePair => {
   const visibility = item?.visibility === "HIDDEN" ? "HIDDEN" : "SAMPLE";
@@ -422,12 +453,20 @@ const readFileAsBase64 = (file: File) => new Promise<string>((resolve, reject) =
   reader.readAsDataURL(file);
 });
 
+const SIDEBAR_WIDTH_STORAGE_KEY = "trs.sidebarWidth";
+const DEFAULT_SIDEBAR_WIDTH = 268;
+const MIN_SIDEBAR_WIDTH = 220;
+const MAX_SIDEBAR_WIDTH = 460;
+
+const clampSidebarWidth = (width: number) => Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width));
+
 export default function StudentDashboard() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<StudentTab>("assignments");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [assignmentQuery, setAssignmentQuery] = useState("");
   const [assignmentStatusFilter, setAssignmentStatusFilter] = useState<"ALL" | "OPEN" | "CLOSED">("ALL");
   
@@ -439,9 +478,9 @@ export default function StudentDashboard() {
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
   
   // Code Editor states
-  const [editorFile, setEditorFile] = useState("solution.cpp");
+  const [editorFile, setEditorFile] = useState("solution.c");
   const [editorContent, setEditorContent] = useState(
-    '#include "kNN.hpp"\n\n// Viết mã nguồn giải bài tập C++ của bạn ở đây.\n'
+    '#include <stdio.h>\n\nint main(void) {\n  // Code ở đây\n  return 0;\n}\n'
   );
   
   // Drag & Drop States
@@ -456,8 +495,8 @@ export default function StudentDashboard() {
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [questionAnswers, setQuestionAnswers] = useState<QuestionAnswers>({});
   const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
-  const [questionEditorSize, setQuestionEditorSize] = useState<"normal" | "large">("normal");
-  const [isQuestionAnswerExpanded, setIsQuestionAnswerExpanded] = useState(false);
+  const [questionEditorSize, setQuestionEditorSize] = useState<QuestionEditorSize>("normal");
+  const [questionCodeScrollTop, setQuestionCodeScrollTop] = useState(0);
   const [questionTrialResults, setQuestionTrialResults] = useState<Record<string, TrialResult>>({});
   const [runningTrialQuestionId, setRunningTrialQuestionId] = useState<string | null>(null);
   const [isReviewingSubmittedWork, setIsReviewingSubmittedWork] = useState(false);
@@ -514,7 +553,7 @@ export default function StudentDashboard() {
     if (!selectedAsm) return;
     const flow = getStudentAssignmentFlow(selectedAsm.assignment_type);
     const questions = parseQuestionConfig(selectedAsm);
-    setEditorFile(selectedAsm.assignment_type === "QUIZ_CODE" ? "answer.txt" : selectedAsm.assignment_type === "PROJECT" ? "README.md" : "solution.cpp");
+    setEditorFile(sourceFileNameForAssignment(selectedAsm));
     setEditorContent(questions[0]?.starterCode || buildStudentStarter(selectedAsm) || `${flow.editorPlaceholder}\n`);
     setSubmitMode(selectedAsm.assignment_type === "PROJECT" ? "file" : "editor");
     setActiveQuestionIndex(0);
@@ -527,7 +566,6 @@ export default function StudentDashboard() {
     setQuestionTrialResults({});
     setRunningTrialQuestionId(null);
     setQuestionEditorSize("normal");
-    setIsQuestionAnswerExpanded(false);
     clearSelectedFiles();
   }, [selectedAsm?.id]);
 
@@ -619,6 +657,10 @@ export default function StudentDashboard() {
       setFormFeedback("");
     }
   }, [selectedSubmission]);
+
+  useEffect(() => {
+    setQuestionCodeScrollTop(0);
+  }, [activeQuestionIndex]);
 
   // Polling for async grading
   useEffect(() => {
@@ -902,6 +944,45 @@ export default function StudentDashboard() {
     router.push("/login");
   };
 
+  useEffect(() => {
+    const storedWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+    if (Number.isFinite(storedWidth) && storedWidth > 0) {
+      setSidebarWidth(clampSidebarWidth(storedWidth));
+    }
+  }, []);
+
+  const handleSidebarResizeStart = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    if (window.innerWidth <= 900) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsSidebarCollapsed(false);
+
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    let nextWidth = startWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      nextWidth = clampSidebarWidth(startWidth + moveEvent.clientX - startX);
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth));
+      document.body.classList.remove("is-sidebar-resizing");
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.body.classList.add("is-sidebar-resizing");
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
+  const resetSidebarWidth = () => {
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(DEFAULT_SIDEBAR_WIDTH));
+  };
+
   const getAssignmentStatus = (assignment: Assignment) => {
     if (!assignment.end_date) return "OPEN";
     const endTime = new Date(assignment.end_date).getTime();
@@ -960,6 +1041,8 @@ export default function StudentDashboard() {
   const selectedFlow = getStudentAssignmentFlow(selectedAsm?.assignment_type);
   const selectedQuestions = parseQuestionConfig(selectedAsm);
   const activeQuestion = selectedQuestions[activeQuestionIndex] || selectedQuestions[0] || null;
+  const activeQuestionAnswer = activeQuestion ? (questionAnswers[activeQuestion.id] ?? activeQuestion.starterCode) : "";
+  const activeQuestionLineCount = Math.max(1, activeQuestionAnswer.split(/\r\n|\r|\n/).length);
   const isQuestionAnswered = (question: AssignmentQuestion) => {
     const answer = (questionAnswers[question.id] || "").trim();
     if (!answer) return false;
@@ -971,9 +1054,18 @@ export default function StudentDashboard() {
   const answeredQuestionCount = selectedQuestions.filter(isQuestionAnswered).length;
   const totalQuestionCount = selectedQuestions.length;
   const questionProgressPercent = totalQuestionCount > 0 ? Math.round((answeredQuestionCount / totalQuestionCount) * 100) : 0;
-  const unansweredQuestions = selectedQuestions
-    .map((question, index) => ({ question, index }))
-    .filter(({ question }) => !isQuestionAnswered(question));
+  const hasQuestionIssue = (question: AssignmentQuestion) => {
+    const result = questionTrialResults[question.id];
+    if (!result) return false;
+    const scoreEntries = normalizeScores(result.scores ?? null);
+    return Boolean(
+      result.error
+      || result.compile_error
+      || result.runtime_error
+      || result.status === "FAILED"
+      || scoreEntries.some((score) => !score.passed)
+    );
+  };
   const goToRelativeQuestion = (offset: number) => {
     if (totalQuestionCount === 0) return;
     setActiveQuestionIndex((current) => Math.min(totalQuestionCount - 1, Math.max(0, current + offset)));
@@ -992,7 +1084,6 @@ export default function StudentDashboard() {
     setQuestionTrialResults({});
     setRunningTrialQuestionId(null);
     setQuestionEditorSize("normal");
-    setIsQuestionAnswerExpanded(false);
   };
   const selectedAcceptedFiles = selectedAsm?.assignment_type === "PROJECT"
     ? ".zip,.cpp,.c,.h,.hpp,.java,.py,.js,.ts,.md,.txt"
@@ -1270,7 +1361,10 @@ export default function StudentDashboard() {
 
       <div className="sidebar-layout">
         {/* Sidebar Nav */}
-        <aside className={`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}>
+        <aside
+          className={`sidebar ${isSidebarCollapsed ? "collapsed" : ""}`}
+          style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+        >
           <div className="sidebar-top">
             <button
               type="button"
@@ -1307,6 +1401,14 @@ export default function StudentDashboard() {
               </div>
             )}
           </nav>
+          <button
+            type="button"
+            className="sidebar-resize-handle"
+            aria-label="Kéo để đổi chiều rộng menu"
+            title="Kéo để đổi chiều rộng menu"
+            onMouseDown={handleSidebarResizeStart}
+            onDoubleClick={resetSidebarWidth}
+          />
         </aside>
 
         {/* Main Content */}
@@ -1316,7 +1418,7 @@ export default function StudentDashboard() {
               <div className="student-assignment-toolbar">
                 <div>
                   <span className="student-assignment-eyebrow">Không gian học tập</span>
-                  <h1>Bài tập lớn</h1>
+                  <h1>Bài tập lớn của tôi</h1>
                 </div>
                 <div className="student-assignment-stats" aria-label="Tổng quan bài tập">
                   <div>
@@ -1409,7 +1511,6 @@ export default function StudentDashboard() {
                               setIsReviewingSubmittedWork(false);
                             }}
                           >
-                            <span className={`student-assignment-status-dot ${status.toLowerCase()}`} aria-hidden="true"></span>
                             <span className="student-assignment-row-main">
                               <strong>{asm.name}</strong>
                             </span>
@@ -1442,12 +1543,6 @@ export default function StudentDashboard() {
                             <h2>{selectedAsm.name}</h2>
                             {selectedAsm.description && <p>{selectedAsm.description}</p>}
                           </div>
-                        </div>
-
-                        <div className="student-workflow-card">
-                          <span>Dạng bài này yêu cầu</span>
-                          <strong>{selectedFlow.workLabel}</strong>
-                          <p>{selectedFlow.workHint}</p>
                         </div>
 
                         <div className="student-assignment-meta-grid">
@@ -1489,11 +1584,10 @@ export default function StudentDashboard() {
           )}
 
           {activeTab === "submit" && selectedAsm && (
-            <div>
-              <h1 style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: "0.5rem" }}>{selectedFlow.submitLabel}</h1>
-              <p style={{ color: "hsl(var(--text-secondary))", marginBottom: "2rem" }}>
-                {selectedFlow.goal} Bài tập: <strong style={{ color: "hsl(var(--color-primary))" }}>{selectedAsm.name}</strong>
-              </p>
+            <div className="student-submit-page">
+              <div className="student-submit-toolbar">
+                <h1>{selectedFlow.submitLabel}</h1>
+              </div>
 
               {showQuestionCompletionView ? (
                 <section className="student-completion-page">
@@ -1631,34 +1725,47 @@ export default function StudentDashboard() {
                         <span>{selectedFlow.label}</span>
                         <strong>{answeredQuestionCount}/{totalQuestionCount}</strong>
                       </div>
-                      <button
-                        type="button"
-                        className={`flag-current-button ${flaggedQuestions[activeQuestion.id] ? "active" : ""}`}
-                        onClick={() => setFlaggedQuestions((current) => ({
-                          ...current,
-                          [activeQuestion.id]: !current[activeQuestion.id],
-                        }))}
-                      >
-                        {flaggedQuestions[activeQuestion.id] ? "Bỏ cờ" : "Cắm cờ"}
-                      </button>
+                      <div className="student-question-number-actions">
+                        {isReviewingSubmittedWork ? (
+                          <div className="student-review-actions compact">
+                            <button type="button" className="btn btn-primary" onClick={() => {
+                              setSubmitSuccess(true);
+                              setIsReviewingSubmittedWork(false);
+                            }}>
+                              Quay lại kết quả
+                            </button>
+                            <button type="button" className="btn btn-secondary" onClick={handleRetakeQuestionAssignment}>
+                              Làm lại
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            className="btn btn-primary student-question-submit-button"
+                            onClick={() => handleSubmitSolution("editor")}
+                            disabled={isSubmitting || answeredQuestionCount < totalQuestionCount}
+                          >
+                            {isSubmitting ? "Đang gửi..." : selectedFlow.submitLabel}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="student-question-progress">
                       <div>
                         <span style={{ width: `${questionProgressPercent}%` }}></span>
                       </div>
-                      <small>Xanh: đã làm · Vàng: đã cắm cờ</small>
                     </div>
                     <div className="student-question-number-grid" aria-label="Chọn câu hỏi">
                       {selectedQuestions.map((question, index) => {
                         const answered = isQuestionAnswered(question);
                         const flagged = Boolean(flaggedQuestions[question.id]);
+                        const hasIssue = hasQuestionIssue(question);
                         return (
                           <button
                             key={question.id}
                             type="button"
-                            className={`${index === activeQuestionIndex ? "active" : ""} ${answered ? "answered" : ""} ${flagged ? "flagged" : ""}`}
+                            className={`${index === activeQuestionIndex ? "active" : ""} ${answered ? "answered" : ""} ${flagged ? "flagged" : ""} ${hasIssue ? "error" : ""}`}
                             onClick={() => setActiveQuestionIndex(index)}
-                            title={`Câu ${index + 1}${answered ? " - đã làm" : " - chưa làm"}${flagged ? " - đã cắm cờ" : ""}`}
+                            title={`Câu ${index + 1}${hasIssue ? " - có lỗi" : answered ? " - đã làm" : " - chưa làm"}${flagged ? " - đã cắm cờ" : ""}`}
                           >
                             {index + 1}
                           </button>
@@ -1667,43 +1774,6 @@ export default function StudentDashboard() {
                     </div>
                   </div>
                 )}
-                <section className="student-question-command-panel">
-                  <div className="student-question-submit-card">
-                    <div>
-                      <span>{isReviewingSubmittedWork ? "Xem lại bài đã nộp" : "Nộp bài"}</span>
-                      <strong>{isReviewingSubmittedWork ? submissionStatusText : `${answeredQuestionCount}/${totalQuestionCount} câu đã làm`}</strong>
-                      <p>
-                        {isReviewingSubmittedWork
-                          ? `Lần nộp gần nhất: ${submittedAtText || "đang cập nhật"}`
-                          : unansweredQuestions.length > 0
-                          ? `Còn thiếu: ${unansweredQuestions.map(({ index }) => `Câu ${index + 1}`).join(", ")}`
-                          : "Đã đủ câu trả lời, có thể nộp toàn bộ bài."}
-                      </p>
-                    </div>
-                    {isReviewingSubmittedWork ? (
-                      <div className="student-review-actions">
-                        <button type="button" className="btn btn-primary" onClick={() => {
-                          setSubmitSuccess(true);
-                          setIsReviewingSubmittedWork(false);
-                        }}>
-                          Quay lại bảng kết quả
-                        </button>
-                        <button type="button" className="btn btn-secondary" onClick={handleRetakeQuestionAssignment}>
-                          Làm lại lần nữa
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        className="btn btn-primary"
-                        onClick={() => handleSubmitSolution("editor")}
-                        disabled={isSubmitting || answeredQuestionCount < totalQuestionCount}
-                      >
-                        {isSubmitting ? "Đang gửi..." : selectedFlow.submitLabel}
-                      </button>
-                    )}
-                  </div>
-
-                </section>
 
                 <section className="student-question-main">
                   {activeQuestion && (
@@ -1711,22 +1781,34 @@ export default function StudentDashboard() {
                       <div className="student-question-paper">
                         <div className="student-question-title-row">
                           <div>
-                            <span>Câu {activeQuestionIndex + 1}</span>
+                            {activeQuestion.title.trim().toLowerCase() !== `câu ${activeQuestionIndex + 1}` && (
+                              <span>Câu {activeQuestionIndex + 1}</span>
+                            )}
                             <h2>{activeQuestion.title}</h2>
                           </div>
-                          <strong>{activeQuestion.points} điểm</strong>
+                          <div className="student-question-title-actions">
+                            <button
+                              type="button"
+                              className={`flag-current-button ${flaggedQuestions[activeQuestion.id] ? "active" : ""}`}
+                              onClick={() => setFlaggedQuestions((current) => ({
+                                ...current,
+                                [activeQuestion.id]: !current[activeQuestion.id],
+                              }))}
+                            >
+                              {flaggedQuestions[activeQuestion.id] ? "Bỏ cờ" : "Cắm cờ"}
+                            </button>
+                          </div>
                         </div>
-                        <p>{activeQuestion.prompt}</p>
+                        {!isDefaultQuestionPrompt(activeQuestion.prompt) && <p>{activeQuestion.prompt}</p>}
                         {activeQuestion.starterCode && activeQuestion.kind !== "SINGLE_CHOICE" && (
                           <pre>{activeQuestion.starterCode}</pre>
                         )}
                         {activeQuestion.testcases.length > 0 && (
                           <div className="student-question-testcases">
-                            <strong>For example</strong>
                             <table>
                               <thead>
                                 <tr>
-                                  <th>Test</th>
+                                  <th>Input</th>
                                   <th>Expected</th>
                                 </tr>
                               </thead>
@@ -1743,31 +1825,33 @@ export default function StudentDashboard() {
                         )}
                       </div>
 
-                      <div className={`student-question-answer-panel ${isQuestionAnswerExpanded ? "expanded" : ""}`}>
+                      <div className={`student-question-answer-panel size-${questionEditorSize}`}>
                         <div className="student-question-answer">
                           <div className="student-question-answer-header">
                             <div>
-                              <strong>Trả lời câu {activeQuestionIndex + 1}</strong>
-                              <span>{activeQuestion.kind === "SINGLE_CHOICE" ? "Chọn 1 đáp án" : "Nhập đáp án cho câu này"}</span>
+                              <strong>Bài làm</strong>
                             </div>
                             <div className="student-question-answer-actions">
                               {activeQuestion.kind !== "SINGLE_CHOICE" && (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="answer-tool-button"
-                                    onClick={() => setQuestionEditorSize((current) => current === "normal" ? "large" : "normal")}
-                                  >
-                                    {questionEditorSize === "normal" ? "Phóng to" : "Thu nhỏ"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="answer-tool-button"
-                                    onClick={() => setIsQuestionAnswerExpanded((current) => !current)}
-                                  >
-                                    {isQuestionAnswerExpanded ? "Thu gọn" : "Mở rộng"}
-                                  </button>
-                                </>
+                                <div className="editor-size-control" aria-label="Chọn kích thước editor">
+                                  <span>Cỡ khung</span>
+                                  <div className="editor-size-slider-wrap">
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={QUESTION_EDITOR_SIZE_OPTIONS.length - 1}
+                                      step={1}
+                                      value={QUESTION_EDITOR_SIZE_INDEX[questionEditorSize]}
+                                      onChange={(e) => setQuestionEditorSize(QUESTION_EDITOR_SIZE_OPTIONS[Number(e.target.value)].value)}
+                                    />
+                                    <div className="editor-size-ticks" aria-hidden="true">
+                                      {QUESTION_EDITOR_SIZE_OPTIONS.map((option) => (
+                                        <i key={option.value} className={questionEditorSize === option.value ? "active" : ""} />
+                                      ))}
+                                    </div>
+                                  </div>
+                                  <strong>{QUESTION_EDITOR_SIZE_OPTIONS[QUESTION_EDITOR_SIZE_INDEX[questionEditorSize]].label}</strong>
+                                </div>
                               )}
                               <span className={isQuestionAnswered(activeQuestion) ? "answer-state done" : "answer-state"}>
                                 {isQuestionAnswered(activeQuestion) ? "Đã làm" : "Chưa làm"}
@@ -1794,13 +1878,35 @@ export default function StudentDashboard() {
                               })}
                             </div>
                           ) : (
-                            <textarea
-                              className={`form-control student-question-code ${questionEditorSize === "large" ? "large" : ""}`}
-                              value={questionAnswers[activeQuestion.id] ?? activeQuestion.starterCode}
-                              readOnly={isReviewingSubmittedWork}
-                              onChange={(e) => setQuestionAnswers((current) => ({ ...current, [activeQuestion.id]: e.target.value }))}
-                              placeholder={selectedFlow.editorPlaceholder}
-                            />
+                            <div className={`student-code-editor-shell ${questionEditorSize}`}>
+                              <div className="student-code-line-gutter" aria-hidden="true">
+                                <div style={{ transform: `translateY(-${questionCodeScrollTop}px)` }}>
+                                  {Array.from({ length: activeQuestionLineCount }, (_, lineIndex) => (
+                                    <span key={`line-${lineIndex + 1}`}>{lineIndex + 1}</span>
+                                  ))}
+                                </div>
+                              </div>
+                              <textarea
+                                className={`form-control student-question-code ${questionEditorSize}`}
+                                value={activeQuestionAnswer}
+                                readOnly={isReviewingSubmittedWork}
+                                onScroll={(e) => setQuestionCodeScrollTop(e.currentTarget.scrollTop)}
+                                onChange={(e) => setQuestionAnswers((current) => ({ ...current, [activeQuestion.id]: e.target.value }))}
+                                placeholder={selectedFlow.editorPlaceholder}
+                              />
+                            </div>
+                          )}
+                          {activeQuestion.kind !== "SINGLE_CHOICE" && (
+                            <div className="student-question-trial-row">
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => handleRunQuestionTrial(activeQuestion, activeQuestionIndex)}
+                                disabled={isReviewingSubmittedWork || runningTrialQuestionId === activeQuestion.id || activeQuestion.testcases.length === 0}
+                              >
+                                {runningTrialQuestionId === activeQuestion.id ? "Đang biên dịch..." : "Biên dịch & chạy thử"}
+                              </button>
+                            </div>
                           )}
                           <div className="student-question-navigation-row">
                             <button type="button" className="btn btn-secondary" onClick={() => goToRelativeQuestion(-1)} disabled={activeQuestionIndex === 0}>
@@ -1810,19 +1916,6 @@ export default function StudentDashboard() {
                               Câu sau
                             </button>
                           </div>
-                          {activeQuestion.kind !== "SINGLE_CHOICE" && (
-                            <div className="student-question-trial-row">
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => handleRunQuestionTrial(activeQuestion, activeQuestionIndex)}
-                                disabled={isReviewingSubmittedWork || runningTrialQuestionId === activeQuestion.id || activeQuestion.testcases.length === 0}
-                              >
-                                {runningTrialQuestionId === activeQuestion.id ? "Đang chạy thử..." : "Chạy thử testcase câu này"}
-                              </button>
-                              <span>{activeQuestion.testcases.length} testcase mẫu</span>
-                            </div>
-                          )}
                           {renderTrialResult(activeQuestion)}
                         </div>
                       </div>
@@ -1909,92 +2002,99 @@ export default function StudentDashboard() {
 
                   <div className="submit-mode-panel">
                     {submitMode === "editor" && (
-                    <div className="tech-panel student-submit-method" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
-                  <h3 className="tech-panel-title">Phương án 1: Làm trực tiếp trong editor</h3>
-                  <div className="form-group" style={{ marginBottom: "1rem" }}>
-                    <label className="form-label">Tên tệp nộp</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editorFile}
-                      onChange={(e) => setEditorFile(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-                    <label className="form-label">{selectedFlow.editorLabel}</label>
-                    <textarea
-                      className="form-control"
-                      value={editorContent}
-                      onChange={(e) => setEditorContent(e.target.value)}
-                      placeholder={selectedFlow.editorPlaceholder}
-                      style={{ fontFamily: "var(--font-mono)", fontSize: "0.85rem", flex: 1, minHeight: "220px", resize: "vertical" }}
-                    />
-                  </div>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => handleSubmitSolution("editor")}
-                    disabled={isSubmitting}
-                    style={{ marginTop: "1rem", alignSelf: "flex-end" }}
-                  >
-                    {isSubmitting ? "Đang gửi..." : selectedFlow.submitLabel}
-                  </button>
-                </div>
+                      <div className="student-submit-method">
+                        <div className="student-submit-method-header">
+                          <span>Phương án 1</span>
+                          <h3>Làm trực tiếp trong editor</h3>
+                        </div>
+                        <div className="student-submit-method-body">
+                          <label className="student-submit-field">
+                            <span>Tên tệp nộp</span>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={editorFile}
+                              onChange={(e) => setEditorFile(e.target.value)}
+                            />
+                          </label>
+                          <label className="student-submit-field fill">
+                            <span>{selectedFlow.editorLabel}</span>
+                            <textarea
+                              className="form-control student-submit-editor"
+                              value={editorContent}
+                              onChange={(e) => setEditorContent(e.target.value)}
+                              placeholder={selectedFlow.editorPlaceholder}
+                            />
+                          </label>
+                        </div>
+                        <div className="student-submit-action-row">
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => handleSubmitSolution("editor")}
+                            disabled={isSubmitting}
+                          >
+                            {isSubmitting ? "Đang gửi..." : selectedFlow.submitLabel}
+                          </button>
+                        </div>
+                      </div>
                     )}
 
                     {submitMode === "file" && (
-                <div className="tech-panel student-submit-method" style={{ marginTop: "0", display: "flex", flexDirection: "column" }}>
-                  <h3 className="tech-panel-title">Phương án 2: Nộp file đính kèm</h3>
-                  
-                  <div
-                    className={`upload-zone ${dragActive ? "drag-active" : ""}`}
-                    onDragEnter={handleDrag}
-                    onDragOver={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", border: dragActive ? "2px dashed hsl(var(--color-primary))" : "" }}
-                  >
-                    <div className="upload-icon">FILE</div>
-                    <div className="upload-text">
-                      {isEncodingFiles
-                        ? "Đang đọc file..."
-                        : encodedSolutionFiles.length > 0
-                          ? `Đã sẵn sàng: ${encodedSolutionFiles.map(f => f.filename).join(', ')}`
-                          : selectedFlow.fileHint}
-                    </div>
-                    <div style={{ marginTop: "0.5rem", color: "hsl(var(--text-muted))", fontSize: "0.82rem", lineHeight: 1.5 }}>
-                      Có thể chọn nhiều file cùng lúc hoặc chọn từng file nhiều lần; hệ thống sẽ tự cộng dồn theo tên file.
-                    </div>
-                    <input
-                      type="file"
-                      multiple
-                      accept={selectedAcceptedFiles}
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      style={{ display: "none" }}
-                    />
-                  </div>
+                      <div className="student-submit-method">
+                        <div className="student-submit-method-header">
+                          <span>Phương án 2</span>
+                          <h3>Nộp file đính kèm</h3>
+                        </div>
+                        <div className="student-submit-method-body">
+                          <div
+                            className={`upload-zone student-submit-upload-zone ${dragActive ? "drag-active" : ""}`}
+                            onDragEnter={handleDrag}
+                            onDragOver={handleDrag}
+                            onDragLeave={handleDrag}
+                            onDrop={handleDrop}
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <div className="upload-icon">FILE</div>
+                            <div className="upload-text">
+                              {isEncodingFiles
+                                ? "Đang đọc file..."
+                                : encodedSolutionFiles.length > 0
+                                  ? `Đã sẵn sàng: ${encodedSolutionFiles.map(f => f.filename).join(', ')}`
+                                  : selectedFlow.fileHint}
+                            </div>
+                            <div className="student-submit-upload-hint">
+                              Có thể chọn nhiều file cùng lúc hoặc chọn từng file nhiều lần; hệ thống sẽ tự cộng dồn theo tên file.
+                            </div>
+                            <input
+                              type="file"
+                              multiple
+                              accept={selectedAcceptedFiles}
+                              ref={fileInputRef}
+                              onChange={handleFileChange}
+                              style={{ display: "none" }}
+                            />
+                          </div>
+                        </div>
 
-                  <div style={{ marginTop: "1rem", display: "flex", justifyContent: "flex-end", gap: "0.75rem", flexWrap: "wrap" }}>
-                    {(encodedSolutionFiles.length > 0 || solutionFiles.length > 0) && (
-                      <button
-                        className="btn"
-                        onClick={clearSelectedFiles}
-                        disabled={isSubmitting || isEncodingFiles}
-                        style={{ background: "rgba(148, 163, 184, 0.12)", color: "hsl(var(--text-secondary))", border: "1px solid rgba(148, 163, 184, 0.25)" }}
-                      >
-                        Xóa file đã chọn
-                      </button>
-                    )}
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => handleSubmitSolution("file")}
-                      disabled={isSubmitting || isEncodingFiles || encodedSolutionFiles.length === 0}
-                    >
-                      {isSubmitting ? "Đang gửi..." : isEncodingFiles ? "Đang đọc file..." : selectedFlow.submitLabel}
-                    </button>
-                  </div>
-                </div>
+                        <div className="student-submit-action-row">
+                          {(encodedSolutionFiles.length > 0 || solutionFiles.length > 0) && (
+                            <button
+                              className="btn btn-secondary"
+                              onClick={clearSelectedFiles}
+                              disabled={isSubmitting || isEncodingFiles}
+                            >
+                              Xóa file đã chọn
+                            </button>
+                          )}
+                          <button
+                            className="btn btn-primary"
+                            onClick={() => handleSubmitSolution("file")}
+                            disabled={isSubmitting || isEncodingFiles || encodedSolutionFiles.length === 0}
+                          >
+                            {isSubmitting ? "Đang gửi..." : isEncodingFiles ? "Đang đọc file..." : selectedFlow.submitLabel}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </section>
@@ -2002,13 +2102,13 @@ export default function StudentDashboard() {
               )}
 
               {submitSuccess && selectedQuestions.length === 0 && (
-                <div style={{ marginTop: "1.5rem", padding: "1rem", background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "var(--radius-sm)", color: "hsl(var(--color-success))" }}>
+                <div className="student-submit-alert success">
                   Gửi bài nộp thành công! Kết quả chấm đang được hiển thị ở tab lịch sử.
                 </div>
               )}
 
               {submitError && (
-                <div style={{ marginTop: "1.5rem", padding: "1rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-sm)", color: "rgb(239, 68, 68)" }}>
+                <div className="student-submit-alert danger">
                   {submitError}
                 </div>
               )}

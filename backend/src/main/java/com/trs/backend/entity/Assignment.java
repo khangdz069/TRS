@@ -26,7 +26,7 @@ public class Assignment extends BaseEntity {
     private String assignmentType = "STANDARD";
 
     @Column(name = "supported_languages", columnDefinition = "text")
-    private String supportedLanguages = "cpp";
+    private String supportedLanguages = "c";
 
     @Column(name = "testcase_samples", columnDefinition = "text")
     private String testcaseSamples = "";
