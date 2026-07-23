@@ -11,6 +11,7 @@ public record CreateAssignmentRequest(
         @JsonProperty("testcase_generation_strategy") String testcaseGenerationStrategy,
         @JsonProperty("testcase_seed_count") Integer testcaseSeedCount,
         @JsonProperty("generated_testcase_count") Integer generatedTestcaseCount,
+        @JsonProperty("duration_minutes") Integer durationMinutes,
         @JsonProperty("problem_statement") String problemStatement,
         @JsonProperty("starter_code") String starterCode,
         @JsonProperty("reference_solution") String referenceSolution,

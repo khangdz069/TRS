@@ -15,6 +15,7 @@ interface Assignment {
   testcase_generation_strategy?: GenerationStrategy;
   testcase_seed_count?: number;
   generated_testcase_count?: number;
+  duration_minutes?: number;
   problem_statement?: string;
   starter_code?: string;
   reference_solution?: string;
@@ -99,7 +100,7 @@ const ASSIGNMENT_WIZARD_STEPS: Array<{
   { value: "REVIEW", title: "Xem lại", helper: "Kiểm tra cuối" },
 ];
 
-const SHOW_ASSIGNMENT_IMPORT_FIELD = false;
+const SHOW_ASSIGNMENT_IMPORT_FIELD = true;
 
 const DEFAULT_TESTCASE_PAIRS: TestcasePair[] = [
   { input: "1", expected: "NO", visibility: "SAMPLE" },
@@ -268,6 +269,40 @@ const parseQuestionConfig = (value: string | undefined, type: AssignmentType): A
     // Older assignments stored a plain config string.
   }
   return [createQuestion(type, 1)];
+};
+
+const hasQuestionContent = (question: AssignmentQuestion) =>
+  Boolean(
+    question.title.trim() ||
+    question.prompt.trim() ||
+    question.starterCode.trim() ||
+    question.referenceAnswer.trim() ||
+    question.options.some((option) => option.trim()) ||
+    question.testcases.some((pair) => pair.input.trim() || pair.expected.trim())
+  );
+
+const questionsForAssignmentEdit = (assignment: Assignment, type: AssignmentType): AssignmentQuestion[] => {
+  const parsedQuestions = parseQuestionConfig(assignment.type_config, type);
+  if (parsedQuestions.some(hasQuestionContent)) {
+    return parsedQuestions;
+  }
+
+  if (type !== "STANDARD" && type !== "QUIZ_CODE") {
+    return parsedQuestions;
+  }
+
+  const fallbackQuestion = createQuestion(type, 1);
+  fallbackQuestion.title = assignment.name || "";
+  fallbackQuestion.prompt = assignment.problem_statement || assignment.description || fallbackQuestion.prompt;
+
+  if (type === "STANDARD") {
+    const importedTestcases = parseTestcasePairs(assignment.testcase_samples);
+    fallbackQuestion.starterCode = assignment.starter_code || "";
+    fallbackQuestion.referenceAnswer = assignment.reference_solution || "";
+    fallbackQuestion.testcases = importedTestcases.length ? importedTestcases : fallbackQuestion.testcases;
+  }
+
+  return [fallbackQuestion];
 };
 
 const stripMarker = (line: string, marker: string) =>
@@ -849,6 +884,7 @@ export default function TeacherDashboard() {
   const [newEnd, setNewEnd] = useState("");
   const [newStartDisplay, setNewStartDisplay] = useState("");
   const [newEndDisplay, setNewEndDisplay] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState(0);
   const [newDesc, setNewDesc] = useState("");
   const [problemStatement, setProblemStatement] = useState("");
   const [starterCode, setStarterCode] = useState("");
@@ -1133,6 +1169,7 @@ export default function TeacherDashboard() {
     setNewEnd(today);
     setNewStartDisplay(formatDateOnly(today));
     setNewEndDisplay(formatDateOnly(today));
+    setDurationMinutes(0);
     setNewDesc("");
     setProblemStatement("");
     setStarterCode("");
@@ -1163,12 +1200,13 @@ export default function TeacherDashboard() {
     setNewEnd(endDate);
     setNewStartDisplay(formatDateOnly(startDate));
     setNewEndDisplay(formatDateOnly(endDate));
+    setDurationMinutes(Math.max(0, Number(assignment.duration_minutes || 0)));
     setNewDesc(assignment.description || "");
     setProblemStatement(assignment.problem_statement || "");
     setStarterCode(assignment.starter_code || "");
     setReferenceSolution(assignment.reference_solution || "");
     setTypeConfig(assignment.type_config || "");
-    setQuestionItems(parseQuestionConfig(assignment.type_config, assignment.assignment_type || "STANDARD"));
+    setQuestionItems(questionsForAssignmentEdit(assignment, assignment.assignment_type || "STANDARD"));
     setLanguages(assignment.supported_languages?.length ? assignment.supported_languages : ["c"]);
     setGenerationStrategy(assignment.testcase_generation_strategy || "MUTATION");
     setTestcasePairs(parseTestcasePairs(assignment.testcase_samples));
@@ -1185,6 +1223,7 @@ export default function TeacherDashboard() {
     testcase_generation_strategy: generationStrategy,
     testcase_seed_count: isQuestionSetAssignment ? questionTestcases.length : seedCount,
     generated_testcase_count: Math.max(0, generatedCount),
+    duration_minutes: Math.max(0, durationMinutes),
     problem_statement: isQuestionSetAssignment ? questionSetProblem(activeQuestions) : problemStatement,
     starter_code: isQuestionSetAssignment ? activeQuestions.map((question) => question.starterCode).filter(Boolean).join("\n\n") : starterCode,
     reference_solution: isQuestionSetAssignment ? questionSetReference(activeQuestions) : referenceSolution,
@@ -2456,6 +2495,19 @@ export default function TeacherDashboard() {
                     required
                   />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Thời gian làm bài</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min={0}
+                    step={1}
+                    value={durationMinutes}
+                    onChange={(e) => setDurationMinutes(Math.max(0, Number(e.target.value) || 0))}
+                    placeholder="Ví dụ: 60"
+                  />
+                  <p className="field-hint">Nhập số phút sinh viên được làm bài. Để 0 nếu không giới hạn thời gian.</p>
+                </div>
                 </>
                 )}
                 {assignmentWizardStep === "CONTENT" && (
@@ -2857,7 +2909,7 @@ export default function TeacherDashboard() {
                       <section>
                         <span>Thời gian</span>
                         <strong>{newStart ? formatDateOnly(newStart) : "Chưa có ngày"} → {newEnd ? formatDateOnly(newEnd) : "Chưa có hạn"}</strong>
-                        <p>{newDesc || "Chưa có mô tả ngắn."}</p>
+                        <p>{durationMinutes > 0 ? `${durationMinutes} phút làm bài` : "Không giới hạn thời gian làm bài"}</p>
                       </section>
                       <section>
                         <span>Nội dung</span>
@@ -2887,7 +2939,7 @@ export default function TeacherDashboard() {
                       <span>{newType === "QUIZ_CODE" ? `${questionItems.length} câu` : `${questionSampleCount} testcase hiển thị`}</span>
                     </div>
                     <div className="student-preview-list">
-                      {activeQuestions.slice(0, 3).map((question, index) => {
+                      {activeQuestions.map((question, index) => {
                         const samplePairs = question.testcases.filter(isSampleTestcase).filter((pair) => pair.input.trim() || pair.expected.trim());
                         return (
                           <div className="student-preview-question" key={`preview-${question.id}`}>
@@ -2907,7 +2959,7 @@ export default function TeacherDashboard() {
                             ) : (
                               <div className="student-preview-testcases">
                                 {samplePairs.length > 0
-                                  ? samplePairs.slice(0, 2).map((pair, pairIndex) => (
+                                  ? samplePairs.map((pair, pairIndex) => (
                                       <code key={`preview-sample-${question.id}-${pairIndex}`}>{pair.input || "Không có input"} → {pair.expected || "Chưa có expected"}</code>
                                     ))
                                   : <em>Chưa có testcase hiển thị cho sinh viên.</em>}

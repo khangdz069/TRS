@@ -318,6 +318,7 @@ public class AssignmentController {
         assignment.setTestcaseGenerationStrategy(normalizeGenerationStrategy(request.testcaseGenerationStrategy()));
         assignment.setTestcaseSeedCount(nonNegative(request.testcaseSeedCount()));
         assignment.setGeneratedTestcaseCount(nonNegative(request.generatedTestcaseCount()));
+        assignment.setDurationMinutes(nonNegative(request.durationMinutes()));
         assignment.setProblemStatement(request.problemStatement() == null ? "" : request.problemStatement());
         assignment.setStarterCode(request.starterCode() == null ? "" : request.starterCode());
         assignment.setReferenceSolution(request.referenceSolution() == null ? "" : request.referenceSolution());

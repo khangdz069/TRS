@@ -357,8 +357,13 @@ public class GraderService {
     }
 
     private String buildDefaultHeader(String source, boolean cMode) {
+        if (cMode) {
+            return source.contains("#include <stdio.h>") || source.contains("#include<stdio.h>")
+                    ? ""
+                    : "#include <stdio.h>\n";
+        }
         if (source.contains("#include")) return "";
-        return cMode ? "#include <stdio.h>\n" : "#include <bits/stdc++.h>\nusing namespace std;\n";
+        return "#include <bits/stdc++.h>\nusing namespace std;\n";
     }
 
     private List<String> buildCompileCommand(String executableName, List<String> sourceFiles, boolean cMode) {

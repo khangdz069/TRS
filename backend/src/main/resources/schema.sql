@@ -327,6 +327,7 @@ begin
         alter table public.assignments add column if not exists testcase_generation_strategy varchar(50);
         alter table public.assignments add column if not exists testcase_seed_count integer;
         alter table public.assignments add column if not exists generated_testcase_count integer;
+        alter table public.assignments add column if not exists duration_minutes integer;
         alter table public.assignments add column if not exists problem_statement text;
         alter table public.assignments add column if not exists starter_code text;
         alter table public.assignments add column if not exists reference_solution text;
@@ -338,6 +339,7 @@ begin
         update public.assignments set testcase_generation_strategy = 'MUTATION' where testcase_generation_strategy is null;
         update public.assignments set testcase_seed_count = 0 where testcase_seed_count is null;
         update public.assignments set generated_testcase_count = 0 where generated_testcase_count is null;
+        update public.assignments set duration_minutes = 0 where duration_minutes is null;
         update public.assignments set problem_statement = '' where problem_statement is null;
         update public.assignments set starter_code = '' where starter_code is null;
         update public.assignments set reference_solution = '' where reference_solution is null;
@@ -349,6 +351,7 @@ begin
         alter table public.assignments alter column testcase_generation_strategy set default 'MUTATION';
         alter table public.assignments alter column testcase_seed_count set default 0;
         alter table public.assignments alter column generated_testcase_count set default 0;
+        alter table public.assignments alter column duration_minutes set default 0;
         alter table public.assignments alter column problem_statement set default '';
         alter table public.assignments alter column starter_code set default '';
         alter table public.assignments alter column reference_solution set default '';
@@ -358,6 +361,7 @@ begin
         alter table public.assignments alter column testcase_generation_strategy set not null;
         alter table public.assignments alter column testcase_seed_count set not null;
         alter table public.assignments alter column generated_testcase_count set not null;
+        alter table public.assignments alter column duration_minutes set not null;
     end if;
 end $$;
 @@

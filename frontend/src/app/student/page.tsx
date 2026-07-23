@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useState, useEffect, useRef, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useState, useEffect, useRef, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 
 interface Assignment {
@@ -14,6 +14,7 @@ interface Assignment {
   testcase_generation_strategy?: string;
   testcase_seed_count?: number;
   generated_testcase_count?: number;
+  duration_minutes?: number;
   problem_statement?: string;
   starter_code?: string;
   reference_solution?: string;
@@ -29,6 +30,16 @@ const formatDateTime = (value?: string | null) => {
   const date = new Date(String(value || ""));
   if (!Number.isFinite(date.getTime())) return "";
   return `${padDatePart(date.getDate())}/${padDatePart(date.getMonth() + 1)}/${date.getFullYear()} ${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+};
+
+const formatDuration = (totalSeconds: number) => {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  return hours > 0
+    ? `${padDatePart(hours)}:${padDatePart(minutes)}:${padDatePart(seconds)}`
+    : `${padDatePart(minutes)}:${padDatePart(seconds)}`;
 };
 
 interface Submission {
@@ -500,6 +511,23 @@ export default function StudentDashboard() {
   const [questionTrialResults, setQuestionTrialResults] = useState<Record<string, TrialResult>>({});
   const [runningTrialQuestionId, setRunningTrialQuestionId] = useState<string | null>(null);
   const [isReviewingSubmittedWork, setIsReviewingSubmittedWork] = useState(false);
+  const [remainingAttemptSeconds, setRemainingAttemptSeconds] = useState<number | null>(null);
+  const autoSubmitAttemptRef = useRef<string | null>(null);
+  const selectedAssignmentRef = useRef<Assignment | null>(null);
+  const selectedQuestionsRef = useRef<AssignmentQuestion[]>([]);
+  const latestSubmissionDraftRef = useRef<{
+    editorFile: string;
+    editorContent: string;
+    encodedSolutionFiles: EncodedSubmissionFile[];
+    questionAnswers: QuestionAnswers;
+    submitMode: SubmitMode;
+  }>({
+    editorFile: "solution.c",
+    editorContent: "",
+    encodedSolutionFiles: [],
+    questionAnswers: {},
+    submitMode: "editor",
+  });
 
   // Feedback Form states
   const [formRating, setFormRating] = useState<number>(5);
@@ -741,9 +769,34 @@ export default function StudentDashboard() {
     }
   };
 
-  const handleSubmitSolution = async (mode: "editor" | "file") => {
+  const handleCodeTextareaKeyDown = (
+    e: KeyboardEvent<HTMLTextAreaElement>,
+    updateValue: (value: string) => void
+  ) => {
+    if (e.key !== "Tab") return;
+    e.preventDefault();
+    const target = e.currentTarget;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    const indent = "    ";
+    const nextValue = `${target.value.slice(0, start)}${indent}${target.value.slice(end)}`;
+    updateValue(nextValue);
+    window.requestAnimationFrame(() => {
+      target.selectionStart = start + indent.length;
+      target.selectionEnd = start + indent.length;
+    });
+  };
+
+  const handleSubmitSolution = async (mode: "editor" | "file", options?: { auto?: boolean }) => {
     const token = localStorage.getItem("trs_token");
-    if (!token || !selectedAsm) return;
+    const assignment = options?.auto ? selectedAssignmentRef.current : selectedAsm;
+    if (!token || !assignment) return;
+
+    const questions = options?.auto ? selectedQuestionsRef.current : selectedQuestions;
+    const draft = options?.auto
+      ? latestSubmissionDraftRef.current
+      : { editorFile, editorContent, encodedSolutionFiles, questionAnswers, submitMode };
+    const effectiveMode = mode === "file" && draft.encodedSolutionFiles.length > 0 && questions.length === 0 ? "file" : "editor";
 
     setIsSubmitting(true);
     setSubmitError("");
@@ -751,15 +804,8 @@ export default function StudentDashboard() {
 
     try {
       let response;
-      if (mode === "editor") {
-        if (selectedQuestions.length > 0) {
-          const firstUnanswered = selectedQuestions.findIndex((question) => !isQuestionAnswered(question));
-          if (firstUnanswered >= 0) {
-            setActiveQuestionIndex(firstUnanswered);
-            setSubmitError(`Bạn còn câu ${firstUnanswered + 1} chưa trả lời.`);
-            setIsSubmitting(false);
-            return;
-          }
+      if (effectiveMode === "editor") {
+        if (questions.length > 0) {
           response = await fetch("/api/submissions", {
             method: "POST",
             headers: {
@@ -767,18 +813,18 @@ export default function StudentDashboard() {
               "Authorization": `Bearer ${token}`
             },
             body: JSON.stringify({
-              assignment_id: selectedAsm.id,
+              assignment_id: assignment.id,
               files: [
                 {
                   filename: "answers.json",
                   content: JSON.stringify({
-                    assignment_id: selectedAsm.id,
-                    answers: selectedQuestions.map((question, index) => ({
+                    assignment_id: assignment.id,
+                    answers: questions.map((question, index) => ({
                       question: index + 1,
                       question_id: question.id,
                       title: question.title,
                       kind: question.kind,
-                      answer: questionAnswers[question.id] || "",
+                      answer: draft.questionAnswers[question.id] || "",
                     })),
                   }, null, 2),
                 }
@@ -793,15 +839,15 @@ export default function StudentDashboard() {
             "Authorization": `Bearer ${token}`
           },
           body: JSON.stringify({
-            assignment_id: selectedAsm.id,
+            assignment_id: assignment.id,
             files: [
-              { filename: editorFile, content: editorContent }
+              { filename: draft.editorFile, content: draft.editorContent }
             ]
           })
         });
         }
       } else {
-        if (encodedSolutionFiles.length === 0) {
+        if (draft.encodedSolutionFiles.length === 0) {
           setSubmitError("Vui lòng kéo thả hoặc chọn tệp tin cần nộp.");
           setIsSubmitting(false);
           return;
@@ -814,8 +860,8 @@ export default function StudentDashboard() {
             "Authorization": `Bearer ${token}`
           },
           body: JSON.stringify({
-            assignment_id: selectedAsm.id,
-            files: encodedSolutionFiles
+            assignment_id: assignment.id,
+            files: draft.encodedSolutionFiles
           })
         });
       }
@@ -831,12 +877,15 @@ export default function StudentDashboard() {
       if (response.ok) {
         setSubmitSuccess(true);
         setIsReviewingSubmittedWork(false);
+        localStorage.removeItem(`trs.assignmentAttemptStart.${assignment.id}`);
+        setRemainingAttemptSeconds(null);
+        autoSubmitAttemptRef.current = null;
         setSolutionFiles([]);
         setEncodedSolutionFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
         
-        await fetchSubmissions(selectedAsm.id, { preferNewest: true });
-        if (selectedQuestions.length === 0) {
+        await fetchSubmissions(assignment.id, { preferNewest: true });
+        if (questions.length === 0) {
           setActiveTab("history");
         }
       } else {
@@ -1040,6 +1089,20 @@ export default function StudentDashboard() {
   const closedAssignmentCount = assignments.length - openAssignmentCount;
   const selectedFlow = getStudentAssignmentFlow(selectedAsm?.assignment_type);
   const selectedQuestions = parseQuestionConfig(selectedAsm);
+  useEffect(() => {
+    selectedAssignmentRef.current = selectedAsm;
+    selectedQuestionsRef.current = selectedQuestions;
+    latestSubmissionDraftRef.current = {
+      editorFile,
+      editorContent,
+      encodedSolutionFiles,
+      questionAnswers,
+      submitMode,
+    };
+  }, [editorContent, editorFile, encodedSolutionFiles, questionAnswers, selectedAsm, selectedQuestions, submitMode]);
+  const selectedDurationMinutes = Math.max(0, Number(selectedAsm?.duration_minutes || 0));
+  const hasAttemptTimer = selectedDurationMinutes > 0;
+  const attemptTimerStorageKey = selectedAsm ? `trs.assignmentAttemptStart.${selectedAsm.id}` : "";
   const activeQuestion = selectedQuestions[activeQuestionIndex] || selectedQuestions[0] || null;
   const activeQuestionAnswer = activeQuestion ? (questionAnswers[activeQuestion.id] ?? activeQuestion.starterCode) : "";
   const activeQuestionLineCount = Math.max(1, activeQuestionAnswer.split(/\r\n|\r|\n/).length);
@@ -1054,6 +1117,46 @@ export default function StudentDashboard() {
   const answeredQuestionCount = selectedQuestions.filter(isQuestionAnswered).length;
   const totalQuestionCount = selectedQuestions.length;
   const questionProgressPercent = totalQuestionCount > 0 ? Math.round((answeredQuestionCount / totalQuestionCount) * 100) : 0;
+  useEffect(() => {
+    if (!selectedAsm || activeTab !== "submit" || !hasAttemptTimer || submitSuccess || isReviewingSubmittedWork) {
+      setRemainingAttemptSeconds(null);
+      return;
+    }
+
+    const limitMs = selectedDurationMinutes * 60 * 1000;
+    const now = Date.now();
+    let startedAt = Number(localStorage.getItem(attemptTimerStorageKey));
+    if (!Number.isFinite(startedAt) || startedAt <= 0) {
+      startedAt = now;
+      localStorage.setItem(attemptTimerStorageKey, String(startedAt));
+    }
+
+    const tick = () => {
+      const remainingSeconds = Math.max(0, Math.ceil((startedAt + limitMs - Date.now()) / 1000));
+      setRemainingAttemptSeconds(remainingSeconds);
+      if (remainingSeconds === 0 && autoSubmitAttemptRef.current !== selectedAsm.id) {
+        autoSubmitAttemptRef.current = selectedAsm.id;
+        const latestDraft = latestSubmissionDraftRef.current;
+        const latestQuestions = selectedQuestionsRef.current;
+        const latestMode = latestDraft.submitMode === "file" && latestDraft.encodedSolutionFiles.length > 0 && latestQuestions.length === 0
+          ? "file"
+          : "editor";
+        handleSubmitSolution(latestMode, { auto: true });
+      }
+    };
+
+    tick();
+    const intervalId = window.setInterval(tick, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [
+    activeTab,
+    attemptTimerStorageKey,
+    hasAttemptTimer,
+    isReviewingSubmittedWork,
+    selectedAsm?.id,
+    selectedDurationMinutes,
+    submitSuccess,
+  ]);
   const hasQuestionIssue = (question: AssignmentQuestion) => {
     const result = questionTrialResults[question.id];
     if (!result) return false;
@@ -1078,6 +1181,11 @@ export default function StudentDashboard() {
     setIsReviewingSubmittedWork(false);
     setSubmitSuccess(false);
     setSubmitError("");
+    if (selectedAsm) {
+      localStorage.removeItem(`trs.assignmentAttemptStart.${selectedAsm.id}`);
+    }
+    setRemainingAttemptSeconds(null);
+    autoSubmitAttemptRef.current = null;
     setActiveQuestionIndex(0);
     setQuestionAnswers({});
     setFlaggedQuestions({});
@@ -1558,6 +1666,10 @@ export default function StudentDashboard() {
                             <span>Ngôn ngữ</span>
                             <strong>{languageLabel(selectedAsm.supported_languages)}</strong>
                           </div>
+                          <div>
+                            <span>Thời gian làm</span>
+                            <strong>{Math.max(0, Number(selectedAsm.duration_minutes || 0)) > 0 ? `${selectedAsm.duration_minutes} phút` : "Không giới hạn"}</strong>
+                          </div>
                         </div>
 
                         <div className="student-assignment-actions">
@@ -1587,6 +1699,10 @@ export default function StudentDashboard() {
             <div className="student-submit-page">
               <div className="student-submit-toolbar">
                 <h1>{selectedFlow.submitLabel}</h1>
+                <div className={`student-attempt-timer ${hasAttemptTimer && remainingAttemptSeconds !== null && remainingAttemptSeconds <= 60 ? "warning" : ""}`}>
+                  <span>Thời gian</span>
+                  <strong>{hasAttemptTimer ? formatDuration(remainingAttemptSeconds ?? selectedDurationMinutes * 60) : "Không giới hạn"}</strong>
+                </div>
               </div>
 
               {showQuestionCompletionView ? (
@@ -1742,7 +1858,7 @@ export default function StudentDashboard() {
                           <button
                             className="btn btn-primary student-question-submit-button"
                             onClick={() => handleSubmitSolution("editor")}
-                            disabled={isSubmitting || answeredQuestionCount < totalQuestionCount}
+                            disabled={isSubmitting}
                           >
                             {isSubmitting ? "Đang gửi..." : selectedFlow.submitLabel}
                           </button>
@@ -1891,6 +2007,7 @@ export default function StudentDashboard() {
                                 value={activeQuestionAnswer}
                                 readOnly={isReviewingSubmittedWork}
                                 onScroll={(e) => setQuestionCodeScrollTop(e.currentTarget.scrollTop)}
+                                onKeyDown={(e) => handleCodeTextareaKeyDown(e, (value) => setQuestionAnswers((current) => ({ ...current, [activeQuestion.id]: value })))}
                                 onChange={(e) => setQuestionAnswers((current) => ({ ...current, [activeQuestion.id]: e.target.value }))}
                                 placeholder={selectedFlow.editorPlaceholder}
                               />
@@ -2022,6 +2139,7 @@ export default function StudentDashboard() {
                             <textarea
                               className="form-control student-submit-editor"
                               value={editorContent}
+                              onKeyDown={(e) => handleCodeTextareaKeyDown(e, setEditorContent)}
                               onChange={(e) => setEditorContent(e.target.value)}
                               placeholder={selectedFlow.editorPlaceholder}
                             />

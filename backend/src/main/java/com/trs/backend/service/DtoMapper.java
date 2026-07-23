@@ -63,6 +63,7 @@ public class DtoMapper {
         map.put("testcase_generation_strategy", assignment.getTestcaseGenerationStrategy());
         map.put("testcase_seed_count", assignment.getTestcaseSeedCount());
         map.put("generated_testcase_count", assignment.getGeneratedTestcaseCount());
+        map.put("duration_minutes", assignment.getDurationMinutes());
         map.put("problem_statement", assignment.getProblemStatement());
         map.put("starter_code", assignment.getStarterCode());
         map.put("reference_solution", assignment.getReferenceSolution());

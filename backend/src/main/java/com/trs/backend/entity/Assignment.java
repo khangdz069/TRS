@@ -40,6 +40,9 @@ public class Assignment extends BaseEntity {
     @Column(name = "generated_testcase_count", nullable = false)
     private Integer generatedTestcaseCount = 0;
 
+    @Column(name = "duration_minutes", nullable = false)
+    private Integer durationMinutes = 0;
+
     @Column(name = "problem_statement", columnDefinition = "text")
     private String problemStatement = "";
 
@@ -127,6 +130,14 @@ public class Assignment extends BaseEntity {
 
     public void setGeneratedTestcaseCount(Integer generatedTestcaseCount) {
         this.generatedTestcaseCount = generatedTestcaseCount;
+    }
+
+    public Integer getDurationMinutes() {
+        return durationMinutes;
+    }
+
+    public void setDurationMinutes(Integer durationMinutes) {
+        this.durationMinutes = durationMinutes;
     }
 
     public String getProblemStatement() {
