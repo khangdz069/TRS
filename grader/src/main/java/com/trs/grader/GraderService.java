@@ -287,10 +287,11 @@ public class GraderService {
                 continue;
             }
 
-            boolean useCCompiler = !isLikelyCppSource(answer);
+            boolean fullProgramAnswer = containsMainFunction(answer);
+            boolean harnessNeedsCpp = !fullProgramAnswer && isLikelyCppSource(testcase.safeInput());
+            boolean useCCompiler = !isLikelyCppSource(answer) && !harnessNeedsCpp;
             Path sourcePath = workspacePath.resolve("question_" + testcase.safeQuestion() + "_tc_" + (index + 1) + (useCCompiler ? ".c" : ".cpp"));
             Path executablePath = workspacePath.resolve("question_" + testcase.safeQuestion() + "_tc_" + (index + 1) + executableName());
-            boolean fullProgramAnswer = containsMainFunction(answer);
             Files.writeString(
                     sourcePath,
                     fullProgramAnswer ? buildFullProgramSource(answer, useCCompiler) : buildHarnessSource(answer, testcase.safeInput(), useCCompiler),
